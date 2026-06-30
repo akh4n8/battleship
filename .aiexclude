@@ -1,0 +1,10 @@
+# .aiexclude
+local.properties
+secrets.xml
+google-services.json
+*.jks
+*.keystore
+
+build/
+.gradle/
+.idea/
