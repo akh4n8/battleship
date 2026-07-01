@@ -69,6 +69,14 @@ import com.ak.battleship.ui.analytics.SonarLoader
 fun GameScreen(viewModel: BattleshipViewModel) {
     val context = LocalContext.current
 
+    // THE FIX: Intercept the Android System Back Gesture
+    BackHandler {
+        viewModel.pauseGame()
+        // If your app relies on a NavController to pop the stack, you would
+        // also call navController.popBackStack() here. If your app naturally
+        // navigates home when currentGame == null, pauseGame() is all you need!
+    }
+
     // --- STATE OBSERVATION ---
     val isOffense = viewModel.isOffenseMode
     val phase = viewModel.currentPhase
@@ -161,10 +169,16 @@ fun GameScreen(viewModel: BattleshipViewModel) {
         } else null
     }
 
-    val activeHeatmap = remember(moves, viewModel.isHeatmapVisible, isBotGame, game?.opponentName, viewModel.moriartyOffensiveMatrix) {
+    val activeHeatmap = remember(moves.size, viewModel.isHeatmapVisible, isBotGame, game?.opponentName, viewModel.moriartyOffensiveMatrix) {
         if (viewModel.isHeatmapVisible && isBotGame) {
             val botMovesSoFar = moves.filter { !it.isOffense && !isShipData(it.result) }
-            TacticalEngine.getLiveHeatmap(game?.opponentName ?: "Unknown", botMovesSoFar, context, viewModel.moriartyOffensiveMatrix)
+            TacticalEngine.getLiveHeatmap(
+                opponentName = game?.opponentName ?: "Unknown",
+                moves = botMovesSoFar,
+                context = context,
+                gameId = game?.id ?: 0, // <-- THE FIX
+                moriartyOffensivePrior = viewModel.moriartyOffensiveMatrix
+            )
         } else null
     }
 
@@ -741,7 +755,7 @@ fun InteractiveCanvasGrid(
         moves.filter { it.isOffense == dbOffense && !isShipData(it.result) }.groupBy { Pair(it.x, it.y) }.mapValues { (_, cellMoves) -> cellMoves.maxByOrNull { it.turnNumber } }
     }
 
-    val densityMap = remember(botHeatmap, phase, isOffense, isBotGame) {
+    val densityMap = remember(botHeatmap, phase, isOffense, isBotGame, moves.size) {
         if (!isOffense && isBotGame && phase == GamePhase.BATTLE) botHeatmap else null
     }
 

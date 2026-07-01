@@ -25,16 +25,16 @@ object TacticalEngine {
 
     suspend fun getBestMove(
         opponentName: String,
-        playerName: String, // <-- NEW
+        playerName: String,
         botMovesSoFar: List<Move>,
         context: Context,
+        gameId: Int, // <-- NEW
         moriartyOffensivePrior: Array<FloatArray>? = null
     ): BotDecision {
         return withContext(Dispatchers.Default) {
             when {
-                // UPGRADED: Routing the player identity to Moriarty
-                opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getBestMove(botMovesSoFar, moriartyOffensivePrior, playerName)
-                opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getBestMove(botMovesSoFar)
+                opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getBestMove(botMovesSoFar, moriartyOffensivePrior, playerName, gameId) // <-- UPDATED
+                opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getBestMove(botMovesSoFar, gameId) // <-- UPDATED
                 opponentName.contains("PureDensity", ignoreCase = true) -> PureDensityBot.getBestMove(botMovesSoFar)
                 opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getBestMove(botMovesSoFar)
                 opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getBestMove(botMovesSoFar, context)
@@ -107,10 +107,10 @@ object TacticalEngine {
         }
     }
 
-    fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, moriartyOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? {
+    fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, gameId: Int, moriartyOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? { // <-- UPDATED
         return when {
-            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getLiveHeatmap(moves, moriartyOffensivePrior)
-            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveHeatmap(moves)
+            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getLiveHeatmap(moves, gameId, moriartyOffensivePrior) // <-- UPDATED
+            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveHeatmap(moves, gameId) // <-- UPDATED
             opponentName.contains("PureDensity", ignoreCase = true) -> PureDensityBot.getLiveHeatmap(moves)
             opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getLiveHeatmap(moves)
             opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getLiveHeatmap(moves, context)
@@ -299,7 +299,13 @@ internal object DeductionEngine {
         return placements
     }
 
-    fun executeLinearKill(board: Array<IntArray>, activeHits: List<Pair<Int, Int>>, claimedHits: Set<Pair<Int, Int>>): Pair<Int, Int>? {
+    // THE FIX: Add the random generator to the signature
+    fun executeLinearKill(
+        board: Array<IntArray>,
+        activeHits: List<Pair<Int, Int>>,
+        claimedHits: Set<Pair<Int, Int>>,
+        random: kotlin.random.Random // <-- NEW
+    ): Pair<Int, Int>? {
         val prunedHits = activeHits.filter { !claimedHits.contains(it) }
         val unvisited = prunedHits.toMutableSet()
 
@@ -325,13 +331,12 @@ internal object DeductionEngine {
 
             if (cluster.size == 1) {
                 val validTargets = getUnknownNeighbors(board, cluster.first())
-                if (validTargets.isNotEmpty()) return validTargets.random()
+                if (validTargets.isNotEmpty()) return validTargets.random(random) // <-- UPDATED
 
             } else if (ys.size == 1) {
                 val y = ys.first()
                 val endpoints = mutableListOf<Pair<Int, Int>>()
 
-                // Safely skips fused hits but stops cleanly at SUNK corpses
                 var xMin = xs.minOrNull() ?: 0
                 while (xMin >= 0 && board[xMin][y] == CELL_HIT) xMin--
                 if (xMin >= 0 && board[xMin][y] == CELL_UNKNOWN) endpoints.add(Pair(xMin, y))
@@ -340,7 +345,7 @@ internal object DeductionEngine {
                 while (xMax <= 9 && board[xMax][y] == CELL_HIT) xMax++
                 if (xMax <= 9 && board[xMax][y] == CELL_UNKNOWN) endpoints.add(Pair(xMax, y))
 
-                if (endpoints.isNotEmpty()) return endpoints.random()
+                if (endpoints.isNotEmpty()) return endpoints.random(random) // <-- UPDATED
 
             } else if (xs.size == 1) {
                 val x = xs.first()
@@ -354,7 +359,7 @@ internal object DeductionEngine {
                 while (yMax <= 9 && board[x][yMax] == CELL_HIT) yMax++
                 if (yMax <= 9 && board[x][yMax] == CELL_UNKNOWN) endpoints.add(Pair(x, yMax))
 
-                if (endpoints.isNotEmpty()) return endpoints.random()
+                if (endpoints.isNotEmpty()) return endpoints.random(random) // <-- UPDATED
 
             } else {
                 val validEndpoints = mutableListOf<Pair<Int, Int>>()
@@ -373,12 +378,12 @@ internal object DeductionEngine {
                         }
                     }
                 }
-                if (validEndpoints.isNotEmpty()) return validEndpoints.random()
+                if (validEndpoints.isNotEmpty()) return validEndpoints.random(random) // <-- UPDATED
             }
 
             for (hit in cluster) {
                 val validTargets = getUnknownNeighbors(board, hit)
-                if (validTargets.isNotEmpty()) return validTargets.random()
+                if (validTargets.isNotEmpty()) return validTargets.random(random) // <-- UPDATED
             }
         }
         return null
@@ -466,13 +471,10 @@ internal object DeductionEngine {
 // ==========================================
 
 private object SherlockBot {
-    private var parityOffset = -1
 
-    fun getBestMove(moves: List<Move>): BotDecision {
-        if (parityOffset == -1 || moves.isNotEmpty()) {
-            val stableSeed = if (moves.isNotEmpty()) moves.first().gameId else 0
-            parityOffset = stableSeed % 2
-        }
+    fun getBestMove(moves: List<Move>, gameId: Int): BotDecision {
+        val parityOffset = gameId % 2
+        val deterministicRandom = kotlin.random.Random((gameId * 10000) + moves.size)
 
         val board = DeductionEngine.getBoardState(moves)
         val heatMap = Array(10) { IntArray(10) { 0 } }
@@ -483,16 +485,22 @@ private object SherlockBot {
         analysis.activeHits.forEach { diagnosticMap[it.first][it.second] = 3 }
 
         if (analysis.activeHits.isNotEmpty()) {
-            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet())
+            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
             if (target != null) return BotDecision(target, "Sherlock: Tracing active vector.", heatMap, diagnosticMap)
         }
 
-        val target = executeGravitationalHunt(board, analysis.deadSizes, analysis.deadShips)
+        val target = executeGravitationalHunt(board, analysis.deadSizes, analysis.deadShips, parityOffset, deterministicRandom)
         val visualHeatmap = DeductionEngine.getHeatmap(board, analysis.deadSizes, true, parityOffset)
         return BotDecision(target, "Sherlock: Gravitational Sweeper.", visualHeatmap, diagnosticMap)
     }
 
-    private fun executeGravitationalHunt(board: Array<IntArray>, deadSizes: List<Int>, deadShips: List<List<Pair<Int, Int>>>): Pair<Int, Int> {
+    private fun executeGravitationalHunt(
+        board: Array<IntArray>,
+        deadSizes: List<Int>,
+        deadShips: List<List<Pair<Int, Int>>>,
+        parityOffset: Int,
+        random: kotlin.random.Random
+    ): Pair<Int, Int> {
         val heatMap = DeductionEngine.getHeatmap(board, deadSizes, useParity = true, parityOffset)
         var maxHeat = -1
         var bestMoves = mutableListOf<Pair<Int, Int>>()
@@ -506,15 +514,15 @@ private object SherlockBot {
                 }
             }
         }
-        if (maxHeat > 0 && bestMoves.isNotEmpty()) return bestMoves.random()
+        if (maxHeat > 0 && bestMoves.isNotEmpty()) return bestMoves.random(random)
 
         val threeShipEnds = mutableListOf<Pair<Int, Int>>()
         for (ship in deadShips) if (ship.size == 3) threeShipEnds.addAll(DeductionEngine.getPerpendicularEnds(ship, board))
-        if (threeShipEnds.isNotEmpty()) return threeShipEnds.random()
+        if (threeShipEnds.isNotEmpty()) return threeShipEnds.random(random)
 
         val otherShipEnds = mutableListOf<Pair<Int, Int>>()
         for (ship in deadShips) if (ship.size != 3) otherShipEnds.addAll(DeductionEngine.getPerpendicularEnds(ship, board))
-        if (otherShipEnds.isNotEmpty()) return otherShipEnds.random()
+        if (otherShipEnds.isNotEmpty()) return otherShipEnds.random(random)
 
         val threePerimeter = mutableListOf<Pair<Int, Int>>()
         for (ship in deadShips) {
@@ -527,7 +535,7 @@ private object SherlockBot {
                 }
             }
         }
-        if (threePerimeter.isNotEmpty()) return threePerimeter.random()
+        if (threePerimeter.isNotEmpty()) return threePerimeter.random(random)
 
         val otherPerimeter = mutableListOf<Pair<Int, Int>>()
         for (ship in deadShips) {
@@ -540,7 +548,7 @@ private object SherlockBot {
                 }
             }
         }
-        if (otherPerimeter.isNotEmpty()) return otherPerimeter.random()
+        if (otherPerimeter.isNotEmpty()) return otherPerimeter.random(random)
 
         val heatMapEm = DeductionEngine.getHeatmap(board, listOf(5, 4, 3, 3), useParity = false, parityOffset)
         var maxHeatEm = -1
@@ -554,13 +562,14 @@ private object SherlockBot {
                 }
             }
         }
-        if (maxHeatEm > 0 && bestMovesEm.isNotEmpty()) return bestMovesEm.random()
+        if (maxHeatEm > 0 && bestMovesEm.isNotEmpty()) return bestMovesEm.random(random)
 
         val openWater = mutableListOf<Pair<Int, Int>>()
         for (x in 0..9) for (y in 0..9) if (board[x][y] == DeductionEngine.CELL_UNKNOWN) openWater.add(Pair(x, y))
-        return if (openWater.isNotEmpty()) openWater.random() else Pair(0, 0)
+        return if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
     }
 
+    // THESE WERE ACCIDENTALLY DELETED - RESTORED HERE:
     fun getLiveDiagnostics(moves: List<Move>): Pair<List<List<Pair<Int, Int>>>, List<Pair<Int, Int>>> {
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
@@ -576,12 +585,22 @@ private object SherlockBot {
         return livingFleet.sortedDescending()
     }
 
-    fun getLiveHeatmap(moves: List<Move>): Array<IntArray> {
-        val stableSeed = if (moves.isNotEmpty()) moves.first().gameId else 0
-        parityOffset = stableSeed % 2
-        
+    fun getLiveHeatmap(moves: List<Move>, gameId: Int): Array<IntArray> {
+        val parityOffset = gameId % 2
+        val deterministicRandom = kotlin.random.Random((gameId * 10000) + moves.size)
+
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
+
+        if (analysis.activeHits.isNotEmpty()) {
+            val visualHeatMap = Array(10) { IntArray(10) { 0 } }
+            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
+            if (target != null) {
+                visualHeatMap[target.first][target.second] = 100
+                return visualHeatMap
+            }
+        }
+
         return DeductionEngine.getHeatmap(board, analysis.deadSizes, useParity = true, parityOffset)
     }
 }
@@ -591,14 +610,10 @@ private object SherlockBot {
 // ==========================================
 
 private object MoriartyBot {
-    private var parityOffset = -1
 
-    // Inside TacticalEngine.kt -> MoriartyBot object
-    fun getBestMove(moves: List<Move>, offensivePrior: Array<FloatArray>?, playerName: String): BotDecision {
-        if (parityOffset == -1 || moves.isNotEmpty()) {
-            val stableSeed = if (moves.isNotEmpty()) moves.first().gameId else 0
-            parityOffset = stableSeed % 2
-        }
+    fun getBestMove(moves: List<Move>, offensivePrior: Array<FloatArray>?, playerName: String, gameId: Int): BotDecision {
+        val parityOffset = gameId % 2
+        val deterministicRandom = kotlin.random.Random((gameId * 10000) + moves.size)
 
         val board = DeductionEngine.getBoardState(moves)
         val heatMap = Array(10) { IntArray(10) { 0 } }
@@ -608,7 +623,6 @@ private object MoriartyBot {
         analysis.claimedHits.forEach { diagnosticMap[it.first][it.second] = 1 }
         analysis.activeHits.forEach { diagnosticMap[it.first][it.second] = 3 }
 
-        // --- EXTRACT TELEMETRY STATE ONCE ---
         val safePrior = offensivePrior ?: Array(10) { FloatArray(10) { 1.0f } }
         val flatWeights = safePrior.flatMap { it.toList() }
         val maxBias = flatWeights.maxOrNull() ?: 1.0f
@@ -617,11 +631,9 @@ private object MoriartyBot {
         val isUniformFallback = offensivePrior == null || (maxBias == 1.0f && minBias == 1.0f)
         val matrixTypeTag = if (isUniformFallback) "Fallback (Uniform 1.0)" else "moriarty_offense_$playerName"
 
-        // 1. Trace active targets first
         if (analysis.activeHits.isNotEmpty()) {
-            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet())
+            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
             if (target != null) {
-                // THE FIX: Standardized 4-Line Tracing Log
                 val logMessage = buildString {
                     append("Target: $playerName | State: Tracing Vector\n")
                     append("Data Array: $matrixTypeTag\n")
@@ -632,10 +644,8 @@ private object MoriartyBot {
             }
         }
 
-        // 2. Process the Bayesian Hunt
-        val (target, peakBayesianHeat) = executeBayesianHuntDetailed(board, analysis.deadSizes, analysis.deadShips, safePrior, heatMap)
+        val (target, peakBayesianHeat) = executeBayesianHuntDetailed(board, analysis.deadSizes, analysis.deadShips, safePrior, heatMap, parityOffset, deterministicRandom)
 
-        // THE FIX: Standardized 4-Line Hunting Log
         val logMessage = buildString {
             append("Target: $playerName | State: Bayesian Hunt\n")
             append("Data Array: $matrixTypeTag\n")
@@ -651,7 +661,9 @@ private object MoriartyBot {
         deadSizes: List<Int>,
         deadShips: List<List<Pair<Int, Int>>>,
         offensivePrior: Array<FloatArray>,
-        visualHeatMap: Array<IntArray>
+        visualHeatMap: Array<IntArray>,
+        parityOffset: Int,
+        random: kotlin.random.Random
     ): Pair<Pair<Int, Int>, Float> {
         val baselineHeatMap = DeductionEngine.getHeatmap(board, deadSizes, useParity = true, parityOffset)
 
@@ -665,7 +677,7 @@ private object MoriartyBot {
                     val humanBias = offensivePrior[x][y]
 
                     val finalScore = baseScore * humanBias
-                    visualHeatMap[x][y] = finalScore.toInt()
+                    visualHeatMap[x][y] = (finalScore * 10f).toInt()
 
                     if (finalScore > maxHeat) {
                         maxHeat = finalScore
@@ -678,11 +690,11 @@ private object MoriartyBot {
         }
 
         val chosenCoordinate = if (maxHeat > 0f && bestMoves.isNotEmpty()) {
-            bestMoves.random()
+            bestMoves.random(random)
         } else {
             val openWater = mutableListOf<Pair<Int, Int>>()
             for (x in 0..9) for (y in 0..9) if (board[x][y] == DeductionEngine.CELL_UNKNOWN) openWater.add(Pair(x, y))
-            if (openWater.isNotEmpty()) openWater.random() else Pair(0, 0)
+            if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
         }
 
         return Pair(chosenCoordinate, maxHeat)
@@ -698,7 +710,6 @@ private object MoriartyBot {
             val validPlacements = mutableListOf<Triple<Int, Int, Boolean>>()
             val heatScores = mutableListOf<Float>()
 
-            // 1. Gather EVERY valid placement on the board
             for (isVertical in listOf(true, false)) {
                 val maxX = if (isVertical) 10 else 10 - size + 1
                 val maxY = if (isVertical) 10 - size + 1 else 10
@@ -724,12 +735,9 @@ private object MoriartyBot {
             }
 
             if (validPlacements.isNotEmpty()) {
-                // THE FIX: Epsilon-Greedy Mixed Strategy
                 val chosenIndex = if (kotlin.random.Random.nextFloat() < 0.30f) {
-                    // 30% chance to bypass psychology and place completely randomly
                     validPlacements.indices.random()
                 } else {
-                    // 70% chance to be psychologically exploitative
                     var minHeat = Float.MAX_VALUE
                     val bestIndices = mutableListOf<Int>()
 
@@ -747,7 +755,6 @@ private object MoriartyBot {
 
                 val (px, py, bestIsVertical) = validPlacements[chosenIndex]
 
-                // Mark the grid as occupied
                 for (i in 0 until size) {
                     val cx = px + if (!bestIsVertical) i else 0
                     val cy = py + if (bestIsVertical) i else 0
@@ -774,16 +781,25 @@ private object MoriartyBot {
         return livingFleet.sortedDescending()
     }
 
-    fun getLiveHeatmap(moves: List<Move>, offensivePrior: Array<FloatArray>?): Array<IntArray> {
-        val stableSeed = if (moves.isNotEmpty()) moves.first().gameId else 0
-        parityOffset = stableSeed % 2
+    fun getLiveHeatmap(moves: List<Move>, gameId: Int, offensivePrior: Array<FloatArray>?): Array<IntArray> {
+        val parityOffset = gameId % 2
+        val deterministicRandom = kotlin.random.Random((gameId * 10000) + moves.size)
 
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
 
         val visualHeatMap = Array(10) { IntArray(10) { 0 } }
+
+        if (analysis.activeHits.isNotEmpty()) {
+            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
+            if (target != null) {
+                visualHeatMap[target.first][target.second] = 100
+                return visualHeatMap
+            }
+        }
+
         val safePrior = offensivePrior ?: Array(10) { FloatArray(10) { 1.0f } }
-        executeBayesianHuntDetailed(board, analysis.deadSizes, analysis.deadShips, safePrior, visualHeatMap)
+        executeBayesianHuntDetailed(board, analysis.deadSizes, analysis.deadShips, safePrior, visualHeatMap, parityOffset, deterministicRandom)
         return visualHeatMap
     }
 }

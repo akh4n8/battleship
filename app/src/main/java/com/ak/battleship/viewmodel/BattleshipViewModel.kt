@@ -10,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import com.ak.battleship.ai.TacticalEngine
 import com.ak.battleship.analytics.InferenceEngine
 import com.ak.battleship.analytics.TrendEngine
-import com.ak.battleship.data.AiMemoryDataStore
 import com.ak.battleship.data.BattleshipDao
 import com.ak.battleship.data.Game
 import com.ak.battleship.data.Move
@@ -246,35 +245,12 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     var moriartyOffensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
     var moriartyDefensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
 
-    // 2. Add an initialization function. You can call this from your MainActivity
-    // right after you create the ViewModel to pass it the Application Context.
-    fun initializeAiMemory(context: Context) {
-        // Build the matrices from the SQLite Database first
-        rebuildMoriartyMemory(context)
-
-        // Then listen to the DataStore for updates
-        viewModelScope.launch {
-            AiMemoryDataStore.getMatrix(context, "moriarty_offensive_prior").collect { matrix ->
-                moriartyOffensiveMatrix = matrix
-            }
-        }
-        viewModelScope.launch {
-            AiMemoryDataStore.getMatrix(context, "moriarty_defensive_prior").collect { matrix ->
-                moriartyDefensiveMatrix = matrix
-            }
-        }
-    }
-
     var lastBotDecision by mutableStateOf<String?>(null); private set
     var lastBotHeatmap by mutableStateOf<Array<IntArray>?>(null); private set
     var lastBotDiagnosticMap by mutableStateOf<Array<IntArray>?>(null); private set
 
     private val _currentWidgetTheme = MutableStateFlow(WidgetTheme.STANDARD_GAUGE)
     val currentWidgetTheme: StateFlow<WidgetTheme> = _currentWidgetTheme.asStateFlow()
-
-    init {
-        initializeAiMemory(context)
-    }
 
     private fun clearTemporalState() {
         _currentMoves.value = emptyList()
@@ -341,13 +317,37 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         viewModelScope.launch {
             clearTemporalState()
 
-            // THE FIX: Use firstOrNull() to grab a single snapshot without deadlocking!
-            if (opponentName == "MoriartyBot") {
-                moriartyOffensiveMatrix = AiMemoryDataStore.getMatrix(context, "moriarty_offense_$playerName").firstOrNull()
-                moriartyDefensiveMatrix = AiMemoryDataStore.getMatrix(context, "moriarty_defense_$playerName").firstOrNull()
+            // THE FIX: Calculate the brain right now using SQLite, bypassing DataStore completely.
+            isAiCalculating = true
+            val allGames = dao.getAllGamesSync()
+            val allMoves = dao.getAllMovesSync()
+
+            val (offense, defense) = if (opponentName.contains("Moriarty", ignoreCase = true) || playerName.contains("Moriarty", ignoreCase = true)) {
+                val human = if (opponentName.contains("Moriarty", ignoreCase = true)) playerName else opponentName
+                calculatePriorsForPlayer(human, allGames, allMoves) // limitTimestamp null = up to right now
+            } else {
+                Pair(null, null)
             }
 
-            val gameId = dao.insertGame(Game(playerName = playerName, opponentName = opponentName, gameMode = gameMode))
+            moriartyOffensiveMatrix = offense
+            moriartyDefensiveMatrix = defense
+
+            val metadataString = if (offense != null && defense != null) {
+                serializeMetadata(mapOf(
+                    "moriarty_offense" to serializeMatrix(offense),
+                    "moriarty_defense" to serializeMatrix(defense)
+                ))
+            } else null
+            isAiCalculating = false
+
+            // THE FIX: Embed the snapshot into the Game row immediately!
+            val gameId = dao.insertGame(Game(
+                playerName = playerName,
+                opponentName = opponentName,
+                gameMode = gameMode,
+                botBrainMetadata = metadataString
+            ))
+
             currentGameId = gameId.toInt()
             currentGame = dao.getGameById(currentGameId!!)
 
@@ -359,7 +359,6 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             }
 
             if (gameMode == "Bot") {
-                // THE FIX: Use the TacticalEngine's dynamic fleet generator instead of the random one!
                 botSecretFleet = TacticalEngine.generateBotFleet(opponentName, moriartyDefensiveMatrix)
                 saveBotFleetToDatabaseInternal()
             }
@@ -755,14 +754,12 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     fun saveOpponentShipsAndFinish(context: Context) {
         val gameId = currentGameId ?: return
         viewModelScope.launch {
-            // 1. Scrub the database of the OLD fleet here, right before we save the new one
             val existingDbMoves = dao.getMovesForGameSync(gameId)
             val oldShipMoves = existingDbMoves.filter { it.isOffense && isShipData(it.result) }
             if (oldShipMoves.isNotEmpty()) {
                 dao.deleteMoves(oldShipMoves)
             }
 
-            // 2. Save the NEW fleet
             val oppShipMoves = placementFleet.filter { it.isPlaced }.flatMap { ship ->
                 ship.getCells().map { cell ->
                     Move(gameId = gameId, isOffense = true, x = cell.first, y = cell.second, result = ship.name, turnNumber = 999, shotNumber = 999)
@@ -770,34 +767,18 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             }
             if (oppShipMoves.isNotEmpty()) dao.insertMoves(oppShipMoves)
 
-            // 3. Finalize the game state & CREATE SNAPSHOT
             val finalResult = pendingResult ?: if (_currentMoves.value.count { it.isOffense && it.result == "HIT" } >= 17) "WIN" else "LOSS"
-            
-            val allGames = dao.getAllGamesSync()
-            val allMoves = dao.getAllMovesSync()
-            val humanName = currentGame?.playerName ?: "Player 1"
-            
-            val (currentOffense, currentDefense) = calculatePriorsForPlayer(humanName, allGames, allMoves)
 
             currentGame?.let { activeGame ->
-                val updatedGame = activeGame.copy(
-                    result = finalResult,
-                    botBrainMetadata = serializeMetadata(mapOf(
-                        "moriarty_offense" to serializeMatrix(currentOffense),
-                        "moriarty_defense" to serializeMatrix(currentDefense)
-                    ))
-                )
+                // THE FIX: Do NOT overwrite botBrainMetadata here. Keep the snapshot taken at startGame!
+                val updatedGame = activeGame.copy(result = finalResult)
                 dao.updateGame(updatedGame)
                 currentGame = updatedGame
                 widgetShotTriggerKey = 0
                 currentPhase = GamePhase.BATTLE
             }
 
-            // 4. Resync the active memory to perfectly match the newly saved database
             observeCurrentGameMoves(gameId)
-
-            // THE FIX: Automatically train the AI on the newly finished match!
-            rebuildMoriartyMemory(context)
         }
     }
 
@@ -893,11 +874,13 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             val botMovesSoFar = _currentMoves.value.filter { !it.isOffense && (it.result == "HIT" || it.result == "MISS") }
 
             // UPGRADED: Pass the human player's explicit name into the router
+            // Inside BattleshipViewModel.kt -> executeBotTurnLoop
             val decision = TacticalEngine.getBestMove(
                 opponentName = currentGame?.opponentName ?: "Unknown",
-                playerName = currentGame?.playerName ?: "Player 1", // <-- NEW
+                playerName = currentGame?.playerName ?: "Player 1",
                 botMovesSoFar = botMovesSoFar,
                 context = context,
+                gameId = currentGameId ?: 0, // <-- THE FIX
                 moriartyOffensivePrior = moriartyOffensiveMatrix
             )
 
@@ -1138,11 +1121,6 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             }
 
             Toast.makeText(context, "Imported $importedCount new games", Toast.LENGTH_SHORT).show()
-
-            // THE FIX: Rebuild memory after importing history
-            if (importedCount > 0) {
-                rebuildMoriartyMemory(context)
-            }
         }
     }
 
@@ -1200,26 +1178,6 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         }
     }
 
-    private fun rebuildMoriartyMemory(context: Context) {
-        viewModelScope.launch(Dispatchers.Default) {
-            val allGames = dao.getAllGamesSync()
-            val allMoves = dao.getAllMovesSync()
-
-            // 1. Identify all unique human beings in the database
-            val allHumans = allGames.flatMap { listOf(it.playerName, it.opponentName) }
-                .filter { !it.contains("Bot", ignoreCase = true) }
-                .distinct()
-
-            for (human in allHumans) {
-                val (finalOffense, finalDefense) = calculatePriorsForPlayer(human, allGames, allMoves)
-
-                // 5. Save with a dynamically named key!
-                AiMemoryDataStore.saveMatrix(context, "moriarty_offense_$human", finalOffense)
-                AiMemoryDataStore.saveMatrix(context, "moriarty_defense_$human", finalDefense)
-            }
-        }
-    }
-
     private fun calculatePriorsForPlayer(
         human: String,
         allGames: List<Game>,
@@ -1229,14 +1187,18 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         val generalContexts = mutableListOf<HumanMatchContext>()
         val specificContexts = mutableListOf<HumanMatchContext>()
 
-        // 2. Find every game this human ever played (within timestamp limit)
         val humanGames = allGames.filter {
             (it.playerName == human || it.opponentName == human) &&
-            (limitTimestamp == null || it.timestamp < limitTimestamp)
+                    (limitTimestamp == null || it.timestamp < limitTimestamp)
         }
 
+        // THE FIX: Group all moves by GameID into a Hash Map (Takes milliseconds)
+        val movesByGameId = allMoves.groupBy { it.gameId }
+
         for (game in humanGames) {
-            val gameMoves = allMoves.filter { it.gameId == game.id }
+            // THE FIX: Instantly look up the game's moves using the dictionary key!
+            val gameMoves = movesByGameId[game.id] ?: emptyList()
+
             if (gameMoves.isEmpty()) continue
 
             // Determine which seat the human was sitting in

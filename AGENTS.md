@@ -7,16 +7,16 @@ A modern Android Battleship application built with Kotlin, Jetpack Compose, and 
 The project strictly follows Unidirectional Data Flow (UDF) and MVVM architecture.
 
 * **`ai/`**: Bot logic, probability density, and target selection.
-    * `TacticalEngine`: Router for all bots.
-    * `DeductionEngine`: Shared physics/logic engine for solving board states.
-* **`analytics/`**: 
-    * `InferenceEngine`: Calculates live win probability using pairwise Z-Scores.
-    * `TrendEngine`: Aggregates historical performance metrics.
-* **`data/`**: Room Entities (`Game`, `Move`), DAOs, and `AiMemoryDataStore` for Bayesian matrices.
+  * `TacticalEngine`: Router for all bots.
+  * `DeductionEngine`: Shared physics/logic engine for solving board states.
+* **`analytics/`**:
+  * `InferenceEngine`: Calculates live win probability using pairwise Z-Scores.
+  * `TrendEngine`: Aggregates historical performance metrics.
+* **`data/`**: Room Entities (`Game`, `Move`) and DAOs (DataStore has been completely removed in favor of pure SQLite).
 * **`model/`**: Pure DTOs (`BotDecision`, `HeatmapData`) and Enums (`GamePhase`, `PlaybackCommand`, `ShotOutcome`).
-* **`ui/`**: 
-    * `game/`: Interactive grids, debug layers, and particle systems.
-    * `widgets/`: Themeable components (`SubmersibleCameraWidget`, etc.) reacting to `PlaybackCommand`.
+* **`ui/`**:
+  * `game/`: Interactive grids, debug layers, and particle systems.
+  * `widgets/`: Themeable components (`SubmersibleCameraWidget`, etc.) reacting to `PlaybackCommand`.
 * **`viewmodel/`**: `BattleshipViewModel` is the Single Source of Truth.
 
 ---
@@ -55,29 +55,26 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 
 ### 3. Preventing Compose Anti-Patterns
 * **The 1-Frame Anti-Flicker (PENDING LOCK):** Always track `processedCommandKey`.
-    * *Usage:* `val isPendingAnimation = commandKey != processedCommandKey`.
-    * *Rule:* Set `processedCommandKey = commandKey` only AFTER internal states are reset inside the `LaunchedEffect`. This locks the UI to a "clean" state before the next animation begins.
+  * *Usage:* `val isPendingAnimation = commandKey != processedCommandKey`.
+  * *Rule:* Set `processedCommandKey = commandKey` only AFTER internal states are reset inside the `LaunchedEffect`. This locks the UI to a "clean" state before the next animation begins.
 * **Layer Handoff (OVERLAY GUARD):** Use a master boolean (e.g., `isActionOverlayActive`) to suppress "Ambient Layers" (patrols, idle lures) during strikes or intros.
-* **Zero-Allocation Canvas:** 
-    * Hoist `rememberTextMeasurer()` outside the `Canvas` block.
-    * Use static `object` geometry (e.g., `FishGeometry`) to cache `Path()` objects.
+* **Zero-Allocation Canvas:**
+  * Hoist `rememberTextMeasurer()` outside the `Canvas` block.
+  * Use static `object` geometry (e.g., `FishGeometry`) to cache `Path()` objects.
 
-### 4. Database & AI Memory
-* **Moriarty Matrices:** Offensive/Defensive priors are stored in `AiMemoryDataStore` keyed by `moriarty_offense_$playerName`.
-* **Point-in-Time (PIT) Reconstruction:** For historical replays, the ViewModel reconstructs the Bayesian prior using a `limitTimestamp`. This ensures the bot's "brain state" matches its knowledge at the time of that specific match.
+### 4. Database & AI Memory (The Snapshot Architecture)
+* **Single Source of Truth:** `AiMemoryDataStore` is permanently deprecated. All memory is dynamically calculated and embedded directly into the SQLite `Game` row.
+* **The Time Capsule:** When a new game starts, the ViewModel calculates Moriarty's Bayesian priors and immediately serializes them into the `botBrainMetadata` TEXT column. This snapshot is frozen forever.
+* **Replay Isolation:** During Replay Mode, the engine strictly loads the `botBrainMetadata` snapshot from that specific historical game. This guarantees that historical playbacks are perfectly insulated from future games.
 * **Psychological Profile Merging:** Priors are built using a 70/30 split: 70% from specific adversarial matches (vs. MoriartyBot) and 30% from general matches (Companion/PassAndPlay). This captures both "Tricking the Bot" and "Natural Habit" behaviors.
-* **Normalization Protocol:** 
-    - **Offense:** Laplace Smoothing (Base 1.0) and Average-Relative Scaling.
-    - **Defense:** Match-Count Normalization (`totalHeat / history.size`) to prevent value explosion over large histories.
-* **Brain Snapshots (Metadata):** Historical games store an immutable snapshot of the bot's priors in the `botBrainMetadata` TEXT column.
-    - **Format:** Pipe-delimited key-value store: `key1#value1|key2#value2`.
-    - **Usage:** Prevents brain corruption if games are deleted and ensures O(1) loading performance.
-* **Room Migrations:** Any schema change REQUIRES a migration in `AppDatabase.kt`.
+* **Normalization Protocol:**
+  - **Offense:** Laplace Smoothing (Base 1.0) and Average-Relative Scaling.
+  - **Defense:** Match-Count Normalization (`totalHeat / history.size`) to prevent value explosion over large histories.
 
-### 5. AI & Diagnostics Protocol
-* **The "Eye" Drawer:** The UI includes a debug toolbar for `Heatmaps` and `Structural Diagnostics`.
-* **Bot Log:** AI reasoning is displayed via `botLog` on the grid.
-* **Deterministic Parity:** `parityOffset` (Checkerboard) must be derived from `gameId % 2`. This prevents visual flickering during replays while maintaining unpredictability across new games.
+### 5. AI & Diagnostics Protocol (Mathematical Determinism)
+* **Deterministic Parity:** The checkerboard hunting pattern MUST be derived precisely via `gameId % 2` inside the `TacticalEngine`. This prevents visual flickering and layout shifts during replays.
+* **Deterministic Tie-Breaking:** All `random()` calls during `executeLinearKill`, Gravitational Hunts, and Bayesian Hunts must use `kotlin.random.Random((gameId * 10000) + moves.size)`. This unbreakable seed guarantees 100% mathematical reproducibility for every single shot in history.
+* **Linear Kill Synchronization:** The UI `getLiveHeatmap` must explicitly spike Linear Kill targets to `100` so the visual heatmap aligns perfectly with the bot's target coordinate.
 * **Epsilon-Greedy Defense:** Moriarty ship placement uses a 30% randomness factor (`Random.nextFloat() < 0.30f`) to prevent a human from "solving" its learned defense pattern.
 
 ---
@@ -117,11 +114,11 @@ When creating or editing widgets, follow these specific visual rules:
 
 ### 1. Repository Management
 * **Branching:** Use descriptive branch names: `feature/name-of-feature` or `fix/bug-description`.
-* **Commits:** Commit messages must follow the format `[Component] Summary of changes`. 
-    * *Example:* `[UI] Added SubmersibleCamera particle effects.`
+* **Commits:** Commit messages must follow the format `[Component] Summary of changes`.
+  * *Example:* `[UI] Added SubmersibleCamera particle effects.`
 * **Ignored Data:** `.artifacts/` and `.kotlin/` are strictly excluded from the repository.
 
 ### 2. When Writing New Code
 1. **Respect the Router:** New Widgets must be added to `WidgetTheme` (ViewModel) and `DynamicWinProbabilityWidget` (UI).
 2. **Stateless Canvas:** `Canvas` blocks must remain stateless. Logic belongs in `remember` or `LaunchedEffect`.
-3. **BackHandler:** Always use `BackHandler` in top-level screens to prevent accidental exits.
+3. **System Back Gesture interception:** Always use `BackHandler` in top-level screens to intercept system edge-swipes to safely call `pauseGame()` and sever background coroutines.
