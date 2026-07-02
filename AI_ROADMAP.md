@@ -10,12 +10,11 @@ The core physics and logic engine underpinning the AI structure. It solves board
 ### Tier 1: The Mathematicians (Optimal vs. Random Opponents)
 These algorithms assume a "random" or mathematically perfect opponent and attempt to solve the board using pure spatial reasoning. They do not profile the human player.
 
-* **`LestradeBot` (Working)** *(Formerly: PureDensityBot)*
+* **`WatsonBot` (Working)** *(Formerly: PureDensityBot)*
   * *The Math:* Marginal Probability Estimator.
-  * *The Lore:* Inspector Lestrade relies on standard police procedure. He maps basic geometric density but suffers from combinatorial shadowing, missing the big picture when ships block one another.
-* **`WatsonBot` (Working)** *(Formerly: SherlockBot)*
-  * *The Math:* Constraint Satisfaction Solver (CSP).
-  * *The Lore:* John Watson is highly competent and logical. He uses the `DeductionEngine` to solve board states and hunts via advanced gravitational sweepers to guarantee a mathematical ceiling on wasted moves.
+  * *The Lore:* John Watson is solid, dependable, and relies on standard medical logic. He maps basic geometric density but suffers from combinatorial shadowing, missing the big picture when ships block one another.
+* **`SherlockBot` (Working)** * *The Math:* Constraint Satisfaction Solver (CSP).
+  * *The Lore:* The ultimate consulting detective. He uses the `DeductionEngine` to solve board states and hunts via advanced gravitational sweepers to guarantee a mathematical ceiling on wasted moves.
 * **`MycroftBot` (WIP / BROKEN)** *(Formerly: DeepBlueBot)*
   * *The Math:* Monte Carlo Joint-Probability Approximator.
   * *The Lore:* Sherlock's older, smarter brother. He possesses massive computational power, preferring to sit in his armchair and simulate 100,000 parallel universes (via Bitboards) rather than rely on traditional legwork.
@@ -48,5 +47,5 @@ The bleeding-edge bots designed to solve advanced game theory concepts and non-s
 
 ## 🛑 Legacy & Experimental (DO NOT USE FOR ARCHITECTURE)
 The following bots are kept strictly for reference and **must not** be used as baselines for new architecture or logic routing.
-* **`DensityBot` (Deprecated):** A flawed early attempt at Watson's deduction. Kept only as a reference for Mycroft's future rebuild.
+* **`DensityBot` (Deprecated):** A flawed early attempt at Sherlock's deduction. Kept only as a reference for Mycroft's future rebuild.
 * **`NemesisBot` (Broken):** A failed Reinforcement Learning experiment. Do not route logic here.

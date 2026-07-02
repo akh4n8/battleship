@@ -93,7 +93,7 @@ fun NewGameSetupCard(
                                     playerName = lastGameForMode.playerName
                                     opponentName = lastGameForMode.opponentName
                                 } else {
-                                    opponentName = if (mode == "Bot") "LestradeBot" else ""
+                                    opponentName = if (mode == "Bot") "WatsonBot" else ""
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size)
@@ -127,8 +127,8 @@ fun NewGameSetupCard(
                                     Text("Opponent Configuration", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
                                     Text(
                                         text = when (opponentName) {
-                                            "LestradeBot" -> "Bayesian Core Active"
-                                            "WatsonBot" -> "Deduction Engine Active"
+                                            "WatsonBot" -> "Bayesian Core Active"
+                                            "SherlockBot" -> "Deduction Engine Active"
                                             "AdlerBot" -> "Psychological Profiler Active" // <-- NEW
                                             "DeepBlueBot" -> "Heuristic Engine Active"
                                             "NemesisBot" -> "Grandma Killer Protocol Active"
@@ -146,13 +146,13 @@ fun NewGameSetupCard(
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = when (opponentName) {
                                         "NemesisBot" -> Color(0xFFD32F2F).copy(alpha = 0.15f)
-                                        "WatsonBot" -> Color(0xFF673AB7).copy(alpha = 0.15f)
+                                        "SherlockBot" -> Color(0xFF673AB7).copy(alpha = 0.15f)
                                         "AdlerBot" -> Color(0xFF00695C).copy(alpha = 0.15f)
                                         else -> Color(0xFF1976D2).copy(alpha = 0.15f)
                                     },
                                     contentColor = when (opponentName) {
                                         "NemesisBot" -> Color(0xFFD32F2F)
-                                        "WatsonBot" -> Color(0xFF673AB7)
+                                        "SherlockBot" -> Color(0xFF673AB7)
                                         "AdlerBot" -> Color(0xFF00695C)
                                         else -> Color(0xFF1976D2)
                                     }
@@ -161,10 +161,10 @@ fun NewGameSetupCard(
                             ) { Text("VS: $opponentName", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
 
                             DropdownMenu(expanded = opponentDropdownExpanded, onDismissRequest = { opponentDropdownExpanded = false }) {
-                                DropdownMenuItem(text = { Text("Lestrade AI (Easy)", color = Color(0xFF1976D2), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "LestradeBot"; opponentDropdownExpanded = false })
+                                DropdownMenuItem(text = { Text("Watson AI (Easy)", color = Color(0xFF1976D2), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "WatsonBot"; opponentDropdownExpanded = false })
                                 DropdownMenuItem(text = { Text("Density Hybrid AI (Broken)", color = Color(0xFF482C06), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "DensityBot"; opponentDropdownExpanded = false })
                                 DropdownMenuItem(text = { Text("Deep Blue (Broken)", color = Color(0xFF482C06), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "DeepBlueBot"; opponentDropdownExpanded = false })
-                                DropdownMenuItem(text = { Text("Watson AI (Master)", color = Color(0xFF673AB7), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "WatsonBot"; opponentDropdownExpanded = false })
+                                DropdownMenuItem(text = { Text("Sherlock AI (Master)", color = Color(0xFF673AB7), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "SherlockBot"; opponentDropdownExpanded = false })
 
                                 // THE FIX: Add Adler to the list!
                                 DropdownMenuItem(text = { Text("Adler AI (Exploitative)", color = Color(0xFF00695C), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "AdlerBot"; opponentDropdownExpanded = false })

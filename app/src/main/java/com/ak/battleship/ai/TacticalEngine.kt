@@ -34,8 +34,8 @@ object TacticalEngine {
         return withContext(Dispatchers.Default) {
             when {
                 opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getBestMove(botMovesSoFar, adlerOffensivePrior, playerName, gameId)
-                opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getBestMove(botMovesSoFar, gameId)
-                opponentName.contains("Lestrade", ignoreCase = true) -> LestradeBot.getBestMove(botMovesSoFar)
+                opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getBestMove(botMovesSoFar, gameId)
+                opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getBestMove(botMovesSoFar)
                 opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getBestMove(botMovesSoFar)
                 opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getBestMove(botMovesSoFar, context)
                 else -> {
@@ -94,7 +94,7 @@ object TacticalEngine {
     fun getLiveDiagnostics(opponentName: String, moves: List<Move>): Pair<List<List<Pair<Int, Int>>>, List<Pair<Int, Int>>>? {
         return when {
             opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveDiagnostics(moves)
-            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveDiagnostics(moves)
+            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveDiagnostics(moves)
             else -> null
         }
     }
@@ -102,7 +102,7 @@ object TacticalEngine {
     fun getLiveLivingFleet(opponentName: String, moves: List<Move>): List<Int>? {
         return when {
             opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveLivingFleet(moves)
-            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveLivingFleet(moves)
+            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveLivingFleet(moves)
             else -> null
         }
     }
@@ -110,8 +110,8 @@ object TacticalEngine {
     fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, gameId: Int, adlerOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? { // <-- UPDATED
         return when {
             opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveHeatmap(moves, gameId, adlerOffensivePrior)
-            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveHeatmap(moves, gameId)
-            opponentName.contains("Lestrade", ignoreCase = true) -> LestradeBot.getLiveHeatmap(moves)
+            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveHeatmap(moves, gameId)
+            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveHeatmap(moves)
             opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getLiveHeatmap(moves)
             opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getLiveHeatmap(moves, context)
             else -> DensityBot().getLiveHeatmap(moves)
@@ -467,10 +467,10 @@ internal object DeductionEngine {
 }
 
 // ==========================================
-// BOT 1: WATSON (GAME THEORY OPTIMAL)
+// BOT 1: SHERLOCK (GAME THEORY OPTIMAL)
 // ==========================================
 
-private object WatsonBot {
+private object SherlockBot {
 
     fun getBestMove(moves: List<Move>, gameId: Int): BotDecision {
         val parityOffset = gameId % 2
@@ -486,12 +486,12 @@ private object WatsonBot {
 
         if (analysis.activeHits.isNotEmpty()) {
             val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
-            if (target != null) return BotDecision(target, "Watson: Tracing active vector.", heatMap, diagnosticMap)
+            if (target != null) return BotDecision(target, "Sherlock: Tracing active vector.", heatMap, diagnosticMap)
         }
 
         val target = executeGravitationalHunt(board, analysis.deadSizes, analysis.deadShips, parityOffset, deterministicRandom)
         val visualHeatmap = DeductionEngine.getHeatmap(board, analysis.deadSizes, true, parityOffset)
-        return BotDecision(target, "Watson: Gravitational Sweeper.", visualHeatmap, diagnosticMap)
+        return BotDecision(target, "Sherlock: Gravitational Sweeper.", visualHeatmap, diagnosticMap)
     }
 
     private fun executeGravitationalHunt(
@@ -805,10 +805,10 @@ private object AdlerBot {
 }
 
 // ==========================================
-// BOT 3: LESTRADE (GEOMETRIC MATH)
+// BOT 3: WATSON (GEOMETRIC MATH)
 // ==========================================
 
-private object LestradeBot {
+private object WatsonBot {
     private const val CELL_UNKNOWN = 0
     private const val CELL_MISS = -1
     private const val CELL_HIT = 1
@@ -837,7 +837,7 @@ private object LestradeBot {
             }
         }
         val target = if (bestMoves.isNotEmpty()) bestMoves.random() else Pair(0, 0)
-        return BotDecision(target, "Lestrade: Geometric Math", densityMap)
+        return BotDecision(target, "Watson: Geometric Math", densityMap)
     }
 
     private fun getBoardState(moves: List<Move>): Array<IntArray> {
@@ -856,16 +856,30 @@ private object LestradeBot {
                 for (y in 0 until 10) {
                     if (x + size <= 10) {
                         var canFit = true
-                        for (i in 0 until size) { if (board[x + i][y] == CELL_MISS) { canFit = false; break } }
+                        var overlapHits = 0
+                        for (i in 0 until size) {
+                            if (board[x + i][y] == CELL_MISS) { canFit = false; break }
+                            if (board[x + i][y] == CELL_HIT) overlapHits++
+                        }
                         if (canFit) {
-                            for (i in 0 until size) { if (board[x + i][y] == CELL_UNKNOWN) densityMap[x + i][y] += 1 }
+                            val weight = if (overlapHits > 0) 1 + overlapHits else 1
+                            for (i in 0 until size) {
+                                if (board[x + i][y] == CELL_UNKNOWN) densityMap[x + i][y] += weight
+                            }
                         }
                     }
                     if (y + size <= 10) {
                         var canFit = true
-                        for (i in 0 until size) { if (board[x][y + i] == CELL_MISS) { canFit = false; break } }
+                        var overlapHits = 0
+                        for (i in 0 until size) {
+                            if (board[x][y + i] == CELL_MISS) { canFit = false; break }
+                            if (board[x][y + i] == CELL_HIT) overlapHits++
+                        }
                         if (canFit) {
-                            for (i in 0 until size) { if (board[x][y + i] == CELL_UNKNOWN) densityMap[x][y + i] += 1 }
+                            val weight = if (overlapHits > 0) 1 + overlapHits else 1
+                            for (i in 0 until size) {
+                                if (board[x][y + i] == CELL_UNKNOWN) densityMap[x][y + i] += weight
+                            }
                         }
                     }
                 }

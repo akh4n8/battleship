@@ -58,5 +58,5 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 ## 🛠️ Version Control Protocol (STRICT)
 
 * **Branching:** Use descriptive branch names: `feature/name-of-feature` or `fix/bug-description`.
-* **Commits:** Commit messages must follow the format `[Component] Summary of changes`. Example: `[AI] Refactored WatsonBot's parity sweep.`
+* **Commits:** Commit messages must follow the format `[Component] Summary of changes`. Example: `[AI] Refactored SherlockBot's parity sweep.`
 * **Ignored Data:** `.artifacts/` and `.kotlin/` are strictly excluded from the repository.
