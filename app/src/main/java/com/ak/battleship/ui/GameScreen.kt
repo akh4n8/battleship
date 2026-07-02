@@ -166,7 +166,7 @@ fun GameScreen(viewModel: BattleshipViewModel) {
         } else null
     }
 
-    val activeHeatmap = remember(moves.size, viewModel.isHeatmapVisible, isBotGame, game?.opponentName, viewModel.moriartyOffensiveMatrix) {
+    val activeHeatmap = remember(moves.size, viewModel.isHeatmapVisible, isBotGame, game?.opponentName, viewModel.adlerOffensiveMatrix) {
         if (viewModel.isHeatmapVisible && isBotGame) {
             val botMovesSoFar = moves.filter { !it.isOffense && !isShipData(it.result) }
             TacticalEngine.getLiveHeatmap(
@@ -174,7 +174,7 @@ fun GameScreen(viewModel: BattleshipViewModel) {
                 moves = botMovesSoFar,
                 context = context,
                 gameId = game?.id ?: 0, // <-- THE FIX
-                moriartyOffensivePrior = viewModel.moriartyOffensiveMatrix
+                adlerOffensivePrior = viewModel.adlerOffensiveMatrix
             )
         } else null
     }

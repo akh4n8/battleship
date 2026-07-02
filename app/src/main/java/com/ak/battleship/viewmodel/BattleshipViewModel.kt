@@ -242,8 +242,8 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     var isAiCalculating by mutableStateOf(false); private set
 
     // 1. Add these variables to the top of your ViewModel (near the other State variables):
-    var moriartyOffensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
-    var moriartyDefensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
+    var adlerOffensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
+    var adlerDefensiveMatrix by mutableStateOf<Array<FloatArray>?>(null); private set
 
     var lastBotDecision by mutableStateOf<String?>(null); private set
     var lastBotHeatmap by mutableStateOf<Array<IntArray>?>(null); private set
@@ -265,8 +265,8 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         initPlacementFleet()
 
         // RESET matrix states to avoid contamination
-        moriartyOffensiveMatrix = null
-        moriartyDefensiveMatrix = null
+        adlerOffensiveMatrix = null
+        adlerDefensiveMatrix = null
 
         // THE FIX: Ensure clean slate for debug layers on load
         isHeatmapVisible = false
@@ -322,20 +322,20 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             val allGames = dao.getAllGamesSync()
             val allMoves = dao.getAllMovesSync()
 
-            val (offense, defense) = if (opponentName.contains("Moriarty", ignoreCase = true) || playerName.contains("Moriarty", ignoreCase = true)) {
-                val human = if (opponentName.contains("Moriarty", ignoreCase = true)) playerName else opponentName
+            val (offense, defense) = if (opponentName.contains("Adler", ignoreCase = true) || playerName.contains("Adler", ignoreCase = true)) {
+                val human = if (opponentName.contains("Adler", ignoreCase = true)) playerName else opponentName
                 calculatePriorsForPlayer(human, allGames, allMoves) // limitTimestamp null = up to right now
             } else {
                 Pair(null, null)
             }
 
-            moriartyOffensiveMatrix = offense
-            moriartyDefensiveMatrix = defense
+            adlerOffensiveMatrix = offense
+            adlerDefensiveMatrix = defense
 
             val metadataString = if (offense != null && defense != null) {
                 serializeMetadata(mapOf(
-                    "moriarty_offense" to serializeMatrix(offense),
-                    "moriarty_defense" to serializeMatrix(defense)
+                    "adler_offense" to serializeMatrix(offense),
+                    "adler_defense" to serializeMatrix(defense)
                 ))
             } else null
             isAiCalculating = false
@@ -359,7 +359,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             }
 
             if (gameMode == "Bot") {
-                botSecretFleet = TacticalEngine.generateBotFleet(opponentName, moriartyDefensiveMatrix)
+                botSecretFleet = TacticalEngine.generateBotFleet(opponentName, adlerDefensiveMatrix)
                 saveBotFleetToDatabaseInternal()
             }
             observeCurrentGameMoves(currentGameId!!)
@@ -381,14 +381,14 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         activePlayer = 1
 
         val currentLocalGame = currentGame
-        if (currentLocalGame != null && (currentLocalGame.opponentName.contains("Moriarty", ignoreCase = true) || currentLocalGame.playerName.contains("Moriarty", ignoreCase = true))) {
-            val humanName = if (currentLocalGame.opponentName.contains("Moriarty", ignoreCase = true)) currentLocalGame.playerName else currentLocalGame.opponentName
+        if (currentLocalGame != null && (currentLocalGame.opponentName.contains("Adler", ignoreCase = true) || currentLocalGame.playerName.contains("Adler", ignoreCase = true))) {
+            val humanName = if (currentLocalGame.opponentName.contains("Adler", ignoreCase = true)) currentLocalGame.playerName else currentLocalGame.opponentName
             
             // 1. Check for Snapshots first!
             if (currentLocalGame.botBrainMetadata != null) {
                 val metadata = parseMetadata(currentLocalGame.botBrainMetadata)
-                metadata["moriarty_offense"]?.let { moriartyOffensiveMatrix = deserializeMatrix(it) }
-                metadata["moriarty_defense"]?.let { moriartyDefensiveMatrix = deserializeMatrix(it) }
+                metadata["adler_offense"]?.let { adlerOffensiveMatrix = deserializeMatrix(it) }
+                metadata["adler_defense"]?.let { adlerDefensiveMatrix = deserializeMatrix(it) }
             } else {
                 // 2. Fallback to dynamic reconstruction for legacy games
                 isAiCalculating = true
@@ -400,14 +400,14 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
                     // SAVE back to DB to repair the legacy record
                     val repairedGame = currentLocalGame.copy(
                         botBrainMetadata = serializeMetadata(mapOf(
-                            "moriarty_offense" to serializeMatrix(pitOffense),
-                            "moriarty_defense" to serializeMatrix(pitDefense)
+                            "adler_offense" to serializeMatrix(pitOffense),
+                            "adler_defense" to serializeMatrix(pitDefense)
                         ))
                     )
                     dao.updateGame(repairedGame)
                     
-                    moriartyOffensiveMatrix = pitOffense
-                    moriartyDefensiveMatrix = pitDefense
+                    adlerOffensiveMatrix = pitOffense
+                    adlerDefensiveMatrix = pitDefense
                 }
                 isAiCalculating = false
             }
@@ -881,7 +881,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
                 botMovesSoFar = botMovesSoFar,
                 context = context,
                 gameId = currentGameId ?: 0, // <-- THE FIX
-                moriartyOffensivePrior = moriartyOffensiveMatrix
+                adlerOffensivePrior = adlerOffensiveMatrix
             )
 
             lastBotDecision = decision.log
@@ -1147,7 +1147,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     }
 
     // ==========================================
-    // MORIARTY: ADVANCED MATRIX BUILDER
+    // ADLER: ADVANCED MATRIX BUILDER
     // ==========================================
 
     private fun serializeMetadata(metadata: Map<String, String>): String {
@@ -1224,8 +1224,8 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
 
             val matchContext = HumanMatchContext(humanShips, huntShots, humanWon)
 
-            // Route to General vs Specific Moriarty context
-            if (game.opponentName == "MoriartyBot" || game.playerName == "MoriartyBot") {
+            // Route to General vs Specific Adler context
+            if (game.opponentName == "AdlerBot" || game.playerName == "AdlerBot") {
                 specificContexts.add(matchContext)
             } else {
                 generalContexts.add(matchContext)

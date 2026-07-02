@@ -15,7 +15,7 @@ object InferenceEngine {
         Pair("luki", "grandma") to 1.08f,
         Pair("richard", "luki") to -1.73f,
         Pair("luki", "nemesisbot") to 12.17f,
-        Pair("luki", "puredensitybot") to 12.77f,
+        Pair("luki", "lestradebot") to 12.77f,
         Pair("luki", "richard") to 12.15f
 
         // Example of adding a new R calculation later:

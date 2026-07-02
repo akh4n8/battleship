@@ -29,13 +29,13 @@ object TacticalEngine {
         botMovesSoFar: List<Move>,
         context: Context,
         gameId: Int, // <-- NEW
-        moriartyOffensivePrior: Array<FloatArray>? = null
+        adlerOffensivePrior: Array<FloatArray>? = null
     ): BotDecision {
         return withContext(Dispatchers.Default) {
             when {
-                opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getBestMove(botMovesSoFar, moriartyOffensivePrior, playerName, gameId) // <-- UPDATED
-                opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getBestMove(botMovesSoFar, gameId) // <-- UPDATED
-                opponentName.contains("PureDensity", ignoreCase = true) -> PureDensityBot.getBestMove(botMovesSoFar)
+                opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getBestMove(botMovesSoFar, adlerOffensivePrior, playerName, gameId)
+                opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getBestMove(botMovesSoFar, gameId)
+                opponentName.contains("Lestrade", ignoreCase = true) -> LestradeBot.getBestMove(botMovesSoFar)
                 opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getBestMove(botMovesSoFar)
                 opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getBestMove(botMovesSoFar, context)
                 else -> {
@@ -50,9 +50,9 @@ object TacticalEngine {
         }
     }
 
-    fun generateBotFleet(opponentName: String, moriartyDefensivePrior: Array<FloatArray>? = null): List<Ship> {
-        return if (opponentName.contains("Moriarty", ignoreCase = true)) {
-            MoriartyBot.generatePhantomFleet(moriartyDefensivePrior)
+    fun generateBotFleet(opponentName: String, adlerDefensivePrior: Array<FloatArray>? = null): List<Ship> {
+        return if (opponentName.contains("Adler", ignoreCase = true)) {
+            AdlerBot.generatePhantomFleet(adlerDefensivePrior)
         } else {
             generateRandomBotFleet()
         }
@@ -93,25 +93,25 @@ object TacticalEngine {
 
     fun getLiveDiagnostics(opponentName: String, moves: List<Move>): Pair<List<List<Pair<Int, Int>>>, List<Pair<Int, Int>>>? {
         return when {
-            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getLiveDiagnostics(moves)
-            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveDiagnostics(moves)
+            opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveDiagnostics(moves)
+            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveDiagnostics(moves)
             else -> null
         }
     }
 
     fun getLiveLivingFleet(opponentName: String, moves: List<Move>): List<Int>? {
         return when {
-            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getLiveLivingFleet(moves)
-            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveLivingFleet(moves)
+            opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveLivingFleet(moves)
+            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveLivingFleet(moves)
             else -> null
         }
     }
 
-    fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, gameId: Int, moriartyOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? { // <-- UPDATED
+    fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, gameId: Int, adlerOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? { // <-- UPDATED
         return when {
-            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.getLiveHeatmap(moves, gameId, moriartyOffensivePrior) // <-- UPDATED
-            opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveHeatmap(moves, gameId) // <-- UPDATED
-            opponentName.contains("PureDensity", ignoreCase = true) -> PureDensityBot.getLiveHeatmap(moves)
+            opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveHeatmap(moves, gameId, adlerOffensivePrior)
+            opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveHeatmap(moves, gameId)
+            opponentName.contains("Lestrade", ignoreCase = true) -> LestradeBot.getLiveHeatmap(moves)
             opponentName.contains("DeepBlue", ignoreCase = true) -> DeepBlueBot.getLiveHeatmap(moves)
             opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getLiveHeatmap(moves, context)
             else -> DensityBot().getLiveHeatmap(moves)
@@ -467,10 +467,10 @@ internal object DeductionEngine {
 }
 
 // ==========================================
-// BOT 1: SHERLOCK (GAME THEORY OPTIMAL)
+// BOT 1: WATSON (GAME THEORY OPTIMAL)
 // ==========================================
 
-private object SherlockBot {
+private object WatsonBot {
 
     fun getBestMove(moves: List<Move>, gameId: Int): BotDecision {
         val parityOffset = gameId % 2
@@ -486,12 +486,12 @@ private object SherlockBot {
 
         if (analysis.activeHits.isNotEmpty()) {
             val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
-            if (target != null) return BotDecision(target, "Sherlock: Tracing active vector.", heatMap, diagnosticMap)
+            if (target != null) return BotDecision(target, "Watson: Tracing active vector.", heatMap, diagnosticMap)
         }
 
         val target = executeGravitationalHunt(board, analysis.deadSizes, analysis.deadShips, parityOffset, deterministicRandom)
         val visualHeatmap = DeductionEngine.getHeatmap(board, analysis.deadSizes, true, parityOffset)
-        return BotDecision(target, "Sherlock: Gravitational Sweeper.", visualHeatmap, diagnosticMap)
+        return BotDecision(target, "Watson: Gravitational Sweeper.", visualHeatmap, diagnosticMap)
     }
 
     private fun executeGravitationalHunt(
@@ -606,10 +606,10 @@ private object SherlockBot {
 }
 
 // ==========================================
-// BOT 2: MORIARTY (EXPLOITATIVE BAYESIAN)
+// BOT 2: ADLER (EXPLOITATIVE BAYESIAN)
 // ==========================================
 
-private object MoriartyBot {
+private object AdlerBot {
 
     fun getBestMove(moves: List<Move>, offensivePrior: Array<FloatArray>?, playerName: String, gameId: Int): BotDecision {
         val parityOffset = gameId % 2
@@ -629,7 +629,7 @@ private object MoriartyBot {
         val minBias = flatWeights.minOrNull() ?: 1.0f
 
         val isUniformFallback = offensivePrior == null || (maxBias == 1.0f && minBias == 1.0f)
-        val matrixTypeTag = if (isUniformFallback) "Fallback (Uniform 1.0)" else "moriarty_offense_$playerName"
+        val matrixTypeTag = if (isUniformFallback) "Fallback (Uniform 1.0)" else "adler_offense_$playerName"
 
         if (analysis.activeHits.isNotEmpty()) {
             val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), deterministicRandom)
@@ -706,65 +706,59 @@ private object MoriartyBot {
         val fleet = mutableListOf<Ship>()
         val grid = Array(10) { BooleanArray(10) { false } }
 
-        // DYNAMIC HEAT: Prevents ships from clumping together
-        val dynamicHeat = Array(10) { x -> FloatArray(10) { y -> safePrior[x][y] } }
-
         for ((size, name) in shipSpecs) {
             val validPlacements = mutableListOf<Triple<Int, Int, Boolean>>()
-            val placementWeights = mutableListOf<Float>()
+            val heatScores = mutableListOf<Float>()
 
-            // 1. Find all valid spots and calculate their heat
             for (isVertical in listOf(true, false)) {
                 val maxX = if (isVertical) 10 else 10 - size + 1
                 val maxY = if (isVertical) 10 - size + 1 else 10
 
                 for (x in 0 until maxX) {
                     for (y in 0 until maxY) {
-                        var canPlace = true
-                        var heatSum = 0.0f
+                        var collision = false
+                        var currentHeat = 0.0f
+
                         for (i in 0 until size) {
                             val cx = x + if (!isVertical) i else 0
                             val cy = y + if (isVertical) i else 0
-                            if (grid[cx][cy]) { canPlace = false; break }
-                            heatSum += dynamicHeat[cx][cy]
+                            if (grid[cx][cy]) { collision = true; break }
+                            currentHeat += safePrior[cx][cy]
                         }
 
-                        if (canPlace) {
+                        if (!collision) {
                             validPlacements.add(Triple(x, y, isVertical))
-                            placementWeights.add(heatSum)
+                            heatScores.add(currentHeat)
                         }
                     }
                 }
             }
 
-            // 2. Select a spot using an Inverse Roulette Wheel (High Heat = Low Probability)
             if (validPlacements.isNotEmpty()) {
-                val maxHeat = placementWeights.maxOrNull() ?: 1.0f
-                val invertedWeights = placementWeights.map { (maxHeat - it) + 0.1f } // 0.1f ensures no spot is 0%
-                val totalWeight = invertedWeights.sum()
+                val chosenIndex = if (kotlin.random.Random.nextFloat() < 0.30f) {
+                    validPlacements.indices.random()
+                } else {
+                    var minHeat = Float.MAX_VALUE
+                    val bestIndices = mutableListOf<Int>()
 
-                var randomValue = kotlin.random.Random.nextFloat() * totalWeight
-                var chosenIndex = validPlacements.lastIndex
-
-                for (i in invertedWeights.indices) {
-                    randomValue -= invertedWeights[i]
-                    if (randomValue <= 0f) { chosenIndex = i; break }
+                    for (i in heatScores.indices) {
+                        if (heatScores[i] < minHeat) {
+                            minHeat = heatScores[i]
+                            bestIndices.clear()
+                            bestIndices.add(i)
+                        } else if (heatScores[i] == minHeat) {
+                            bestIndices.add(i)
+                        }
+                    }
+                    bestIndices.random()
                 }
 
-                // 3. Place the ship and apply the dynamic spacing penalty
                 val (px, py, bestIsVertical) = validPlacements[chosenIndex]
+
                 for (i in 0 until size) {
                     val cx = px + if (!bestIsVertical) i else 0
                     val cy = py + if (bestIsVertical) i else 0
                     grid[cx][cy] = true
-
-                    // Spacing Penalty: Make surrounding cells "hot" so the next ship avoids them
-                    for (dx in -1..1) {
-                        for (dy in -1..1) {
-                            val nx = cx + dx; val ny = cy + dy
-                            if (nx in 0..9 && ny in 0..9) dynamicHeat[nx][ny] += 2.0f
-                        }
-                    }
                 }
                 fleet.add(Ship(name = name, size = size, x = px.toFloat(), y = py.toFloat(), isVertical = bestIsVertical, isPlaced = true))
             }
@@ -811,10 +805,10 @@ private object MoriartyBot {
 }
 
 // ==========================================
-// BOT 3: PURE DENSITY (GEOMETRIC MATH)
+// BOT 3: LESTRADE (GEOMETRIC MATH)
 // ==========================================
 
-private object PureDensityBot {
+private object LestradeBot {
     private const val CELL_UNKNOWN = 0
     private const val CELL_MISS = -1
     private const val CELL_HIT = 1
@@ -843,7 +837,7 @@ private object PureDensityBot {
             }
         }
         val target = if (bestMoves.isNotEmpty()) bestMoves.random() else Pair(0, 0)
-        return BotDecision(target, "Pure Density Math", densityMap)
+        return BotDecision(target, "Lestrade: Geometric Math", densityMap)
     }
 
     private fun getBoardState(moves: List<Move>): Array<IntArray> {
