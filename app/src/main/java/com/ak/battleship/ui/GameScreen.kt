@@ -72,9 +72,6 @@ fun GameScreen(viewModel: BattleshipViewModel) {
     // THE FIX: Intercept the Android System Back Gesture
     BackHandler {
         viewModel.pauseGame()
-        // If your app relies on a NavController to pop the stack, you would
-        // also call navController.popBackStack() here. If your app naturally
-        // navigates home when currentGame == null, pauseGame() is all you need!
     }
 
     // --- STATE OBSERVATION ---
