@@ -706,59 +706,65 @@ private object MoriartyBot {
         val fleet = mutableListOf<Ship>()
         val grid = Array(10) { BooleanArray(10) { false } }
 
+        // DYNAMIC HEAT: Prevents ships from clumping together
+        val dynamicHeat = Array(10) { x -> FloatArray(10) { y -> safePrior[x][y] } }
+
         for ((size, name) in shipSpecs) {
             val validPlacements = mutableListOf<Triple<Int, Int, Boolean>>()
-            val heatScores = mutableListOf<Float>()
+            val placementWeights = mutableListOf<Float>()
 
+            // 1. Find all valid spots and calculate their heat
             for (isVertical in listOf(true, false)) {
                 val maxX = if (isVertical) 10 else 10 - size + 1
                 val maxY = if (isVertical) 10 - size + 1 else 10
 
                 for (x in 0 until maxX) {
                     for (y in 0 until maxY) {
-                        var collision = false
-                        var currentHeat = 0.0f
-
+                        var canPlace = true
+                        var heatSum = 0.0f
                         for (i in 0 until size) {
                             val cx = x + if (!isVertical) i else 0
                             val cy = y + if (isVertical) i else 0
-                            if (grid[cx][cy]) { collision = true; break }
-                            currentHeat += safePrior[cx][cy]
+                            if (grid[cx][cy]) { canPlace = false; break }
+                            heatSum += dynamicHeat[cx][cy]
                         }
 
-                        if (!collision) {
+                        if (canPlace) {
                             validPlacements.add(Triple(x, y, isVertical))
-                            heatScores.add(currentHeat)
+                            placementWeights.add(heatSum)
                         }
                     }
                 }
             }
 
+            // 2. Select a spot using an Inverse Roulette Wheel (High Heat = Low Probability)
             if (validPlacements.isNotEmpty()) {
-                val chosenIndex = if (kotlin.random.Random.nextFloat() < 0.30f) {
-                    validPlacements.indices.random()
-                } else {
-                    var minHeat = Float.MAX_VALUE
-                    val bestIndices = mutableListOf<Int>()
+                val maxHeat = placementWeights.maxOrNull() ?: 1.0f
+                val invertedWeights = placementWeights.map { (maxHeat - it) + 0.1f } // 0.1f ensures no spot is 0%
+                val totalWeight = invertedWeights.sum()
 
-                    for (i in heatScores.indices) {
-                        if (heatScores[i] < minHeat) {
-                            minHeat = heatScores[i]
-                            bestIndices.clear()
-                            bestIndices.add(i)
-                        } else if (heatScores[i] == minHeat) {
-                            bestIndices.add(i)
-                        }
-                    }
-                    bestIndices.random()
+                var randomValue = kotlin.random.Random.nextFloat() * totalWeight
+                var chosenIndex = validPlacements.lastIndex
+
+                for (i in invertedWeights.indices) {
+                    randomValue -= invertedWeights[i]
+                    if (randomValue <= 0f) { chosenIndex = i; break }
                 }
 
+                // 3. Place the ship and apply the dynamic spacing penalty
                 val (px, py, bestIsVertical) = validPlacements[chosenIndex]
-
                 for (i in 0 until size) {
                     val cx = px + if (!bestIsVertical) i else 0
                     val cy = py + if (bestIsVertical) i else 0
                     grid[cx][cy] = true
+
+                    // Spacing Penalty: Make surrounding cells "hot" so the next ship avoids them
+                    for (dx in -1..1) {
+                        for (dy in -1..1) {
+                            val nx = cx + dx; val ny = cy + dy
+                            if (nx in 0..9 && ny in 0..9) dynamicHeat[nx][ny] += 2.0f
+                        }
+                    }
                 }
                 fleet.add(Ship(name = name, size = size, x = px.toFloat(), y = py.toFloat(), isVertical = bestIsVertical, isPlaced = true))
             }

@@ -1262,67 +1262,64 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     }
 
     private fun buildOffensivePrior(history: List<HumanMatchContext>): Array<FloatArray> {
-        val prior = Array(10) { FloatArray(10) { 1.0f } } // Laplace Smoothing
+        val prior = Array(10) { FloatArray(10) { 1.0f } } // Base 1.0 Laplace Smoothing
+
+        // Pure Bayesian: Decaying historical frequency
+        val decayFactor = 0.85f // Dropped to 0.85 to help it forget slightly faster
+        var currentWeight = 1.0f
         var totalWeightedSamples = 0f
 
-        val decayFactor = 0.9f
-
-        history.asReversed().forEachIndexed { matchIndex, match ->
-            // Calculate the base exponential recency weight
-            var matchWeight = Math.pow(decayFactor.toDouble(), matchIndex.toDouble()).toFloat()
-
-            // Apply the Win-Stay, Lose-Shift behavioral modifiers
-            if (match.humanWon) {
-                matchWeight *= 1.5f
-            } else {
-                matchWeight *= 0.3f
-            }
-
+        // Iterate backwards (most recent game first)
+        history.asReversed().forEach { match ->
             for (peg in match.humanShipPegs) {
                 if (peg.x in 0..9 && peg.y in 0..9) {
-                    prior[peg.x][peg.y] += matchWeight
-                    totalWeightedSamples += matchWeight
+                    prior[peg.x][peg.y] += currentWeight
                 }
             }
+            totalWeightedSamples += currentWeight
+            currentWeight *= decayFactor // The next game back matters 15% less
         }
 
+        // Normalize against the average to create multipliers (e.g., 1.2x, 0.8x)
         if (totalWeightedSamples > 0f) {
             val averageWeight = prior.flatMap { it.toList() }.average().toFloat()
-            for (x in 0..9) for (y in 0..9) prior[x][y] = prior[x][y] / averageWeight
+            for (x in 0..9) {
+                for (y in 0..9) {
+                    prior[x][y] /= averageWeight
+                }
+            }
         }
         return prior
     }
 
     private fun buildDefensivePrior(history: List<HumanMatchContext>): Array<FloatArray> {
-        // Initialize to 1.0f to satisfy the core Laplace Smoothing Protocol
-        val prior = Array(10) { FloatArray(10) { 1.0f } }
-        var totalWeightedGames = 0f
+        val prior = Array(10) { FloatArray(10) { 1.0f } } // Base 1.0 Laplace Smoothing
 
-        if (history.isEmpty()) return prior
+        // Pure Bayesian: Decaying historical frequency
+        val decayFactor = 0.85f
+        var currentWeight = 1.0f
+        var totalWeightedSamples = 0f
 
-        val decayFactor = 0.9f
-
-        history.asReversed().forEachIndexed { matchIndex, match ->
-            val matchWeight = Math.pow(decayFactor.toDouble(), matchIndex.toDouble()).toFloat()
-            totalWeightedGames += matchWeight
-
-            match.humanHuntShots.forEachIndexed { index, shot ->
+        // Iterate backwards (most recent game first)
+        history.asReversed().forEach { match ->
+            for (shot in match.humanHuntShots) {
                 if (shot.x in 0..9 && shot.y in 0..9) {
-                    // Shots fired earlier in the hunt phase are weighted heavier
-                    val shotWeight = maxOf(0.1f, 1.0f - (index * 0.02f))
-                    prior[shot.x][shot.y] += (shotWeight * matchWeight)
+                    prior[shot.x][shot.y] += currentWeight
+                }
+            }
+            totalWeightedSamples += currentWeight
+            currentWeight *= decayFactor // The next game back matters 15% less
+        }
+
+        // Normalize against the average to create multipliers
+        if (totalWeightedSamples > 0f) {
+            val averageWeight = prior.flatMap { it.toList() }.average().toFloat()
+            for (x in 0..9) {
+                for (y in 0..9) {
+                    prior[x][y] /= averageWeight
                 }
             }
         }
-
-        // Normalize by total exponential game weights instead of a raw size count
-        val normalizationDenominator = if (totalWeightedGames > 0f) totalWeightedGames else history.size.toFloat()
-        for (x in 0..9) {
-            for (y in 0..9) {
-                prior[x][y] = prior[x][y] / normalizationDenominator
-            }
-        }
-
         return prior
     }
 }
