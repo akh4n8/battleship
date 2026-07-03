@@ -55,8 +55,9 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 
 ---
 
-## 🛠️ Version Control Protocol (STRICT)
+## 🛠️ Version Control & Documentation Protocol (STRICT)
 
+* **Documentation Driven Development:** Whenever a major feature, bug fix, or architectural shift is completed, the corresponding `.md` files (e.g., `AGENTS.md`, `AI_ROADMAP.md`) MUST be immediately updated to reflect the new state of the codebase.
 * **Branching:** Use descriptive branch names: `feature/name-of-feature` or `fix/bug-description`.
 * **Commits:** Commit messages must follow the format `[Component] Summary of changes`. Example: `[AI] Refactored SherlockBot's parity sweep.`
 * **Ignored Data:** `.artifacts/` and `.kotlin/` are strictly excluded from the repository.

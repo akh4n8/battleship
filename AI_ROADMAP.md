@@ -14,10 +14,10 @@ These algorithms assume a "random" or mathematically perfect opponent and attemp
   * *The Math:* Marginal Probability Estimator.
   * *The Lore:* John Watson is solid, dependable, and relies on standard medical logic. He maps basic geometric density but suffers from combinatorial shadowing, missing the big picture when ships block one another.
 * **`SherlockBot` (Working)** * *The Math:* Constraint Satisfaction Solver (CSP).
-  * *The Lore:* The ultimate consulting detective. He uses the `DeductionEngine` to solve board states and hunts via advanced gravitational sweepers to guarantee a mathematical ceiling on wasted moves.
-* **`MycroftBot` (WIP / BROKEN)** *(Formerly: DeepBlueBot)*
+  * *The Lore:* The ultimate consulting detective. He uses the `DeductionEngine` to solve board states and hunts via advanced gravitational sweepers to guarantee a mathematical ceiling on wasted moves. Blisteringly fast.
+* **`MycroftBot` (Working)** *(Formerly: DeepBlueBot)*
   * *The Math:* Monte Carlo Joint-Probability Approximator.
-  * *The Lore:* Sherlock's older, smarter brother. He possesses massive computational power, preferring to sit in his armchair and simulate 100,000 parallel universes (via Bitboards) rather than rely on traditional legwork.
+  * *The Lore:* Sherlock's older, smarter brother. He possesses massive computational power, executing a 100,000-step zero-allocation Markov Chain Monte Carlo loop using 128-bit bitboards. He calculates perfect joint-probability density, mathematically guaranteeing no catastrophic late-game failures.
 
 ---
 
@@ -36,9 +36,12 @@ Bots built on top of Tier 1 foundations, but overridden to exploit human biases,
 ### Tier 3 & Beyond (Future Roadmap)
 The bleeding-edge bots designed to solve advanced game theory concepts and non-stationarity.
 
+* **`The Sovereign Engine` (Future - Python Testing Phase)**
+  * *The Math:* Hybrid Ensemble Engine (Complexity-Gated).
+  * *The Lore:* The absolute apex of Battleship logic. Fuses Sherlock's instant geometric speed in the early game with Mycroft's joint-probability MCMC squeeze in the late game to achieve true mathematical optimality.
 * **`MoriartyBot` (Future)** *(The Neural Network)*
   * *The Math:* Non-Stationary Sequence Predictor (LSTM / Transformer).
-  * *The Lore:* The Napoleon of Crime. Where Adler assumes the player's strategy is a fixed trait, Moriarty learns *meta-patterns* and behavioral reactions, predicting exactly when the human will actively change their strategy. Escaping his web is mathematically impossible.
+  * *The Lore:* The Napoleon of Crime. Where Adler assumes the player's strategy is a fixed trait, Moriarty learns *meta-patterns* and behavioral reactions, predicting exactly when the human will actively change their strategy.
 * **`HudsonBot` (Future)** *(The "Lucky Genius")*
   * *The Math:* Inverse Reinforcement Learning (IRL) / Dynamic Difficulty Adjustment.
   * *The Lore:* Sherlock's landlady gently manages the chaos. She intentionally maximizes her own mathematical regret at the exact right moments to ensure the player wins in a way that feels intensely satisfying and hard-fought.
