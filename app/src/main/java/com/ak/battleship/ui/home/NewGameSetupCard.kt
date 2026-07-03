@@ -157,14 +157,11 @@ fun NewGameSetupCard(
                             DropdownMenu(expanded = opponentDropdownExpanded, onDismissRequest = { opponentDropdownExpanded = false }) {
                                 DropdownMenuItem(text = { Text("Watson AI (Forgiving)", color = getPlayerColor("WatsonBot"), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "WatsonBot"; opponentDropdownExpanded = false })
                                 DropdownMenuItem(text = { Text("Sherlock AI (Difficult)", color = getPlayerColor("SherlockBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "SherlockBot"; opponentDropdownExpanded = false })
-// "Mycroft AI (Relentless)"
+                                DropdownMenuItem(text = { Text("Mycroft AI (Relentless)", color = getPlayerColor("MycroftBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "MycroftBot"; opponentDropdownExpanded = false })
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text("Adler AI (Exploitative)", color = getPlayerColor("AdlerBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "AdlerBot"; opponentDropdownExpanded = false })
 // "Moriarty AI (Omniscient)"
 // "Hudson AI (Empowering)
-//                                DropdownMenuItem(text = { Text("Mycroft AI (Broken)", color = getPlayerColor("MycroftBot"), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "MycroftBot"; opponentDropdownExpanded = false })
-//                                DropdownMenuItem(text = { Text("Density Hybrid AI (Broken)", color = getPlayerColor("DensityBot"), fontWeight = FontWeight.SemiBold) }, onClick = { opponentName = "DensityBot"; opponentDropdownExpanded = false })
-//                                DropdownMenuItem(text = { Text("Nemesis AI (Grandma Killer, Broken)", color = getPlayerColor("NemesisBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "NemesisBot"; opponentDropdownExpanded = false })
                             }
                         }
                     }
