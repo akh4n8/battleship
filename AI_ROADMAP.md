@@ -9,7 +9,7 @@ The core physics and logic engine underpinning the AI structure. It solves board
 
 ### Tier 1: The Mathematicians (Optimal vs. Random Opponents)
 These algorithms assume a "random" or mathematically perfect opponent and attempt to solve the board using pure spatial reasoning. They do not profile the human player.
-
+[BattleshipDao.kt](app/src/main/java/com/ak/battleship/data/BattleshipDao.kt)
 * **`WatsonBot` (Working)** *(Formerly: PureDensityBot)*
   * *The Math:* Marginal Probability Estimator.
   * *The Lore:* John Watson is solid, dependable, and relies on standard medical logic. He maps basic geometric density but suffers from combinatorial shadowing, missing the big picture when ships block one another.

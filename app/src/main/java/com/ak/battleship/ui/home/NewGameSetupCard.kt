@@ -143,9 +143,9 @@ fun NewGameSetupCard(
                                             "WatsonBot" -> "Marginal Probability Active"
                                             "SherlockBot" -> "Constraint Solver Active"
                                             "AdlerBot" -> "Psychological Profiler Active"
-                                            "MycroftBot", "DeepBlueBot" -> "Monte Carlo Engine Active"
-                                            "NemesisBot" -> "Reinforcement Learning Active"
-                                            "DensityBot" -> "Legacy Density Core Active"
+                                            "MycroftBot" -> "Monte Carlo Engine Active"
+                                            "MoriartyBot" -> "Neural Network Sequencer Active"
+                                            "HudsonBot" -> "Calculated Serendipity Active"
                                             else -> "AI Framework Initialized"
                                         },
                                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium
@@ -172,7 +172,7 @@ fun NewGameSetupCard(
                                 DropdownMenuItem(text = { Text("Mycroft AI (Relentless)", color = getPlayerColor("MycroftBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "MycroftBot"; opponentDropdownExpanded = false })
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text("Adler AI (Exploitative)", color = getPlayerColor("AdlerBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "AdlerBot"; opponentDropdownExpanded = false })
-// "Moriarty AI (Omniscient)"
+                                DropdownMenuItem(text = { Text("Moriarty AI (Omniscient)", color = getPlayerColor("MoriartyBot"), fontWeight = FontWeight.Bold) }, onClick = { opponentName = "MoriartyBot"; opponentDropdownExpanded = false})
 // "Hudson AI (Empowering)
                             }
                         }
