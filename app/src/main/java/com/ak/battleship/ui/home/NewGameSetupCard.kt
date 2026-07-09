@@ -17,20 +17,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ak.battleship.data.Game
-
-@Composable
-fun getPlayerColor(name: String): Color {
-    return when (name) {
-        "WatsonBot" -> Color(0xFF637E7C)   // Deep Blue-Grey (Professional, standard police procedure)
-        "SherlockBot" -> Color(0xFF0469B2) // Rich Indigo (Masterful, aligns well with your app's primary purple)
-        "MycroftBot" -> Color(0xFFA8760F)  // Dark Teal (Cold, calculating supercomputer)
-        "AdlerBot" -> Color(0xFF715673)    // Deep Berry Pink (Elegant, psychological prestige)
-        "MoriartyBot" -> Color(0xFFB20808) // Dark Crimson (Dangerous, final boss)
-        "HudsonBot" -> Color(0xFF21A808)   // Burnt Orange (Warm, inviting, lucky)
-
-        else -> MaterialTheme.colorScheme.primary // Fallback to your app's native primary color
-    }
-}
+import com.ak.battleship.ui.getPlayerColor
+import com.ak.battleship.ui.partitionPlayers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,12 +93,36 @@ fun NewGameSetupCard(
 
                 ExposedDropdownMenuBox(expanded = playerDropdownExpanded, onExpandedChange = { playerDropdownExpanded = it }) {
                     OutlinedTextField(
-                        value = playerName, onValueChange = { playerName = it },
-                        label = { Text("Player Name") }, modifier = Modifier.fillMaxWidth().menuAnchor(), singleLine = true
+                        value = playerName,
+                        onValueChange = { playerName = it },
+                        label = { Text("Player Name") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(color = getPlayerColor(playerName))
                     )
-                    ExposedDropdownMenu(expanded = playerDropdownExpanded && playerSuggestions.isNotEmpty(), onDismissRequest = { playerDropdownExpanded = false }) {
-                        playerSuggestions.forEach { suggestion ->
-                            DropdownMenuItem(text = { Text(suggestion) }, onClick = { playerName = suggestion; playerDropdownExpanded = false })
+
+                    val (humans, bots) = remember(playerSuggestions) { partitionPlayers(playerSuggestions) }
+
+                    ExposedDropdownMenu(
+                        expanded = playerDropdownExpanded && (humans.isNotEmpty() || bots.isNotEmpty()),
+                        onDismissRequest = { playerDropdownExpanded = false }
+                    ) {
+                        humans.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(suggestion, color = getPlayerColor(suggestion), fontWeight = FontWeight.Bold) },
+                                onClick = { playerName = suggestion; playerDropdownExpanded = false }
+                            )
+                        }
+
+                        if (humans.isNotEmpty() && bots.isNotEmpty()) {
+                            HorizontalDivider()
+                        }
+
+                        bots.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(suggestion, color = getPlayerColor(suggestion), fontWeight = FontWeight.Bold) },
+                                onClick = { playerName = suggestion; playerDropdownExpanded = false }
+                            )
                         }
                     }
                 }
@@ -168,13 +180,36 @@ fun NewGameSetupCard(
                 } else {
                     ExposedDropdownMenuBox(expanded = opponentDropdownExpanded, onExpandedChange = { opponentDropdownExpanded = it }) {
                         OutlinedTextField(
-                            value = opponentName, onValueChange = { opponentName = it },
+                            value = opponentName,
+                            onValueChange = { opponentName = it },
                             label = { Text(if (selectedMode == "PassAndPlay") "Player 2 Name" else "Opponent Name") },
-                            modifier = Modifier.fillMaxWidth().menuAnchor(), singleLine = true
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(color = getPlayerColor(opponentName))
                         )
-                        ExposedDropdownMenu(expanded = opponentDropdownExpanded && opponentSuggestions.isNotEmpty(), onDismissRequest = { opponentDropdownExpanded = false }) {
-                            opponentSuggestions.forEach { suggestion ->
-                                DropdownMenuItem(text = { Text(suggestion) }, onClick = { opponentName = suggestion; opponentDropdownExpanded = false })
+
+                        val (humans, bots) = remember(opponentSuggestions) { partitionPlayers(opponentSuggestions) }
+
+                        ExposedDropdownMenu(
+                            expanded = opponentDropdownExpanded && (humans.isNotEmpty() || bots.isNotEmpty()),
+                            onDismissRequest = { opponentDropdownExpanded = false }
+                        ) {
+                            humans.forEach { suggestion ->
+                                DropdownMenuItem(
+                                    text = { Text(suggestion, color = getPlayerColor(suggestion), fontWeight = FontWeight.Bold) },
+                                    onClick = { opponentName = suggestion; opponentDropdownExpanded = false }
+                                )
+                            }
+
+                            if (humans.isNotEmpty() && bots.isNotEmpty()) {
+                                HorizontalDivider()
+                            }
+
+                            bots.forEach { suggestion ->
+                                DropdownMenuItem(
+                                    text = { Text(suggestion, color = getPlayerColor(suggestion), fontWeight = FontWeight.Bold) },
+                                    onClick = { opponentName = suggestion; opponentDropdownExpanded = false }
+                                )
                             }
                         }
                     }

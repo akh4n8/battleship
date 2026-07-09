@@ -74,38 +74,72 @@ fun AnalyticsScreen(viewModel: BattleshipViewModel, onNavigateBack: () -> Unit) 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 1. Player Filter Box
             Box {
-                AssistChip(onClick = { expandedPlayerFilterMenu = true }, label = { Text(if (currentPlayerFilter == "All") "Player: All" else "Player: $currentPlayerFilter") })
+                AssistChip(
+                    onClick = { expandedPlayerFilterMenu = true },
+                    label = { Text(if (currentPlayerFilter == "All") "Player: All" else "Player: $currentPlayerFilter") }
+                )
                 DropdownMenu(expanded = expandedPlayerFilterMenu, onDismissRequest = { expandedPlayerFilterMenu = false }) {
                     DropdownMenuItem(text = { Text("Show All Players") }, onClick = { viewModel.setPlayerFilter("All"); expandedPlayerFilterMenu = false })
                     HorizontalDivider()
-                    historyPlayerSuggestions.forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = { viewModel.setPlayerFilter(name); expandedPlayerFilterMenu = false }) }
-                }
-            }
-            Box {
-                AssistChip(onClick = { expandedOpponentFilterMenu = true }, label = { Text(if (currentOpponentFilter == "All") "Opponent: All" else "Opp: $currentOpponentFilter") })
-                DropdownMenu(expanded = expandedOpponentFilterMenu, onDismissRequest = { expandedOpponentFilterMenu = false }) {
 
-                    val humans = historyOpponentSuggestions.filterNot { it.contains("Bot", ignoreCase = true) }
-                    val bots = historyOpponentSuggestions.filter { it.contains("Bot", ignoreCase = true) }
+                    val (humans, bots) = remember(historyPlayerSuggestions) { partitionPlayers(historyPlayerSuggestions) }
 
-                    DropdownMenuItem(text = { Text("Show All Opponents") }, onClick = { viewModel.setOpponentFilter("All"); expandedOpponentFilterMenu = false })
-
-                    if (humans.isNotEmpty()) {
-                        HorizontalDivider()
-                        humans.forEach { name ->
-                            DropdownMenuItem(text = { Text(name) }, onClick = { viewModel.setOpponentFilter(name); expandedOpponentFilterMenu = false })
-                        }
+                    // Render Humans
+                    humans.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { viewModel.setPlayerFilter(name); expandedPlayerFilterMenu = false }
+                        )
                     }
 
-                    if (bots.isNotEmpty()) {
+                    // Section separator if both exist
+                    if (humans.isNotEmpty() && bots.isNotEmpty()) {
                         HorizontalDivider()
-                        bots.forEach { name ->
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = { viewModel.setOpponentFilter(name); expandedOpponentFilterMenu = false }
-                            )
-                        }
+                    }
+
+                    // Render Bots
+                    bots.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { viewModel.setPlayerFilter(name); expandedPlayerFilterMenu = false }
+                        )
+                    }
+                }
+            }
+
+            // 2. Opponent Filter Box
+            Box {
+                AssistChip(
+                    onClick = { expandedOpponentFilterMenu = true },
+                    label = { Text(if (currentOpponentFilter == "All") "Opponent: All" else "Opp: $currentOpponentFilter") }
+                )
+                DropdownMenu(expanded = expandedOpponentFilterMenu, onDismissRequest = { expandedOpponentFilterMenu = false }) {
+                    DropdownMenuItem(text = { Text("Show All Opponents") }, onClick = { viewModel.setOpponentFilter("All"); expandedOpponentFilterMenu = false })
+                    HorizontalDivider()
+
+                    val (humans, bots) = remember(historyOpponentSuggestions) { partitionPlayers(historyOpponentSuggestions) }
+
+                    // Render Humans
+                    humans.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { viewModel.setOpponentFilter(name); expandedOpponentFilterMenu = false }
+                        )
+                    }
+
+                    // Section separator if both exist
+                    if (humans.isNotEmpty() && bots.isNotEmpty()) {
+                        HorizontalDivider()
+                    }
+
+                    // Render Bots
+                    bots.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { viewModel.setOpponentFilter(name); expandedOpponentFilterMenu = false }
+                        )
                     }
                 }
             }

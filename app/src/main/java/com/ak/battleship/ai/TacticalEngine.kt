@@ -1202,8 +1202,6 @@ private object MycroftBot {
 
     fun getBestMove(moves: List<Move>, gameId: Int): BotDecision {
         val random = kotlin.random.Random((gameId * 10000) + moves.size)
-        val parityOffset = gameId % 2
-        val safeMode = true // Forces checkerboard parity during open hunting phases
 
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
@@ -1214,14 +1212,8 @@ private object MycroftBot {
         analysis.claimedHits.forEach { diagnosticMap[it.first][it.second] = 1 }
         analysis.activeHits.forEach { diagnosticMap[it.first][it.second] = 3 }
 
-        // --- PHASE 1: THE ASSASSIN (Deduction Override) ---
-        if (analysis.activeHits.isNotEmpty()) {
-            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), random)
-            if (target != null) {
-                heatMap[target.first][target.second] = 100
-                return BotDecision(target, "Mycroft: Tracing active vector (Assassin Mode).", heatMap, diagnosticMap)
-            }
-        }
+        // Note: Phase 1 (The Assassin) has been completely removed.
+        // Mycroft now relies entirely on Phase 2-6 for all targeting, including wounded ships.
 
         // --- PHASE 2: 128-BIT BITBOARD EXTRACTION & CHRONOLOGY ---
         var missLow = 0L; var missHigh = 0L
@@ -1347,12 +1339,13 @@ private object MycroftBot {
         // --- PHASE 5: THE ZERO-ALLOCATION MARKOV CHAIN ---
         val rawHeatmap = IntArray(100) { 0 }
         var validUniverses = 0
-        val maxTimeMs = 300L // 300ms execution cap guarantees strict 60FPS UI rendering animations
+        val maxTimeMs = 300L
         val startTime = System.currentTimeMillis()
         val burnInPeriod = 1000
 
         for (step in 0 until 100_000) {
-            if (System.currentTimeMillis() - startTime > maxTimeMs) break
+            // Only check the hardware clock every 1000th iteration
+            if (step % 1000 == 0 && System.currentTimeMillis() - startTime > maxTimeMs) break
 
             val jumpTwo = random.nextFloat() < 0.2f
             val idx1 = random.nextInt(5)
@@ -1475,17 +1468,11 @@ private object MycroftBot {
         var maxHeat = -1
         var bestMoves = mutableListOf<Pair<Int, Int>>()
 
-        var occLow = 0L; var occHigh = 0L
-        for (i in 0..4) { occLow = occLow or stateLow[i]; occHigh = occHigh or stateHigh[i] }
-        val hasActiveHits = (allHitsLow and occLow) != allHitsLow || (allHitsHigh and occHigh) != allHitsHigh
-
         for (x in 0..9) {
             for (y in 0..9) {
                 if (board[x][y] == DeductionEngine.CELL_UNKNOWN) {
                     val idx = y * 10 + x
-                    var heat = rawHeatmap[idx]
-
-                    if (!hasActiveHits && safeMode && (x + y) % 2 != parityOffset) heat = 0
+                    val heat = rawHeatmap[idx]
 
                     heatMap[x][y] = heat
                     if (heat > maxHeat) {
@@ -1499,14 +1486,14 @@ private object MycroftBot {
         }
 
         val target = if (maxHeat > 0 && bestMoves.isNotEmpty()) {
-            bestMoves.random(random)
+            bestMoves.random(random) // Deterministic tie-breaking is strictly preserved
         } else {
             val openWater = mutableListOf<Pair<Int, Int>>()
             for (x in 0..9) for (y in 0..9) if (board[x][y] == DeductionEngine.CELL_UNKNOWN) openWater.add(Pair(x, y))
             if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
         }
 
-        return BotDecision(target, "Mycroft MCMC (Safe Mode): Sampled $validUniverses universes.", heatMap, diagnosticMap)
+        return BotDecision(target, "Mycroft MCMC (Maverick Mode): Sampled $validUniverses universes.", heatMap, diagnosticMap)
     }
 
     fun getLiveHeatmap(moves: List<Move>, gameId: Int): Array<IntArray>? {
