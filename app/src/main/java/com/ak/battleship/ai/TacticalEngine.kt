@@ -54,10 +54,12 @@ object TacticalEngine {
     }
 
     fun generateBotFleet(opponentName: String, adlerDefensivePrior: Array<FloatArray>? = null): List<Ship> {
-        return if (opponentName.contains("Adler", ignoreCase = true)) {
-            AdlerBot.generatePhantomFleet(adlerDefensivePrior)
-        } else {
-            generateRandomBotFleet()
+        return when {
+            // Adler keeps her rigid, exploitable pure-Bayesian algorithm
+            opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.generatePhantomFleet(adlerDefensivePrior)
+            // Moriarty gets the new Entropy-Maximized logic (ready for an ML prior!)
+            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.generatePhantomFleet(adlerDefensivePrior)
+            else -> generateRandomBotFleet()
         }
     }
 
@@ -1092,7 +1094,7 @@ private object MycroftBot {
         // --- PHASE 5: THE ZERO-ALLOCATION MARKOV CHAIN ---
         val rawHeatmap = IntArray(100) { 0 }
         var validUniverses = 0
-        val maxTimeMs = 300L
+        val maxTimeMs = 3000L
         val startTime = System.currentTimeMillis()
         val burnInPeriod = 1000
 
@@ -1237,25 +1239,50 @@ private object MycroftBot {
             }
         }
 
-        // --- PHASE 6: HEATMAP ASSEMBLY & TARGETING (WITH MACHINE LEARNING PRIOR) ---
+        // --- PHASE 6: HEATMAP ASSEMBLY & TARGETING ---
         var maxHeat = -1
         var bestMoves = mutableListOf<Pair<Int, Int>>()
+
+        val parityOffset = gameId % 2
 
         for (x in 0..9) {
             for (y in 0..9) {
                 if (board[x][y] == DeductionEngine.CELL_UNKNOWN) {
                     val idx = y * 10 + x
-
-                    // The core MCMC Probability
                     val baseHeat = rawHeatmap[idx].toFloat()
+                    val finalHeat: Int
 
-                    // The Moriarty Transformer Bias (defaults to 1.0 if not available)
-                    val priorMultiplier = moriartyPrior?.get(x)?.get(y) ?: 1.0f // <-- UPDATED
+                    if (moriartyPrior != null) {
+                        // MORIARTY MODE: Spatial Diffusion + Strict Parity
+                        val isValidParity = (x + y) % 2 == parityOffset
 
-                    // The Fusion of Perfect Physics and Human Psychology
-                    val finalHeat = (baseHeat * priorMultiplier).toInt()
+                        if (isValidParity) {
+                            // 1. Get the base psychological multiplier
+                            var localMaxBias = moriartyPrior[x][y].coerceIn(0.15f, 4.0f)
+
+                            // 2. SPATIAL DIFFUSION: Absorb intuition from off-parity neighbors
+                            val neighbors = listOf(Pair(x - 1, y), Pair(x + 1, y), Pair(x, y - 1), Pair(x, y + 1))
+                            for ((nx, ny) in neighbors) {
+                                if (nx in 0..9 && ny in 0..9) {
+                                    val neighborBias = moriartyPrior[nx][ny].coerceIn(0.15f, 4.0f)
+                                    if (neighborBias > localMaxBias) {
+                                        localMaxBias = neighborBias
+                                    }
+                                }
+                            }
+                            // 3. Fuse perfect physics with the pooled psychology
+                            finalHeat = (baseHeat * localMaxBias).toInt()
+                        } else {
+                            // 4. Force checkerboard by muting off-parity cells
+                            finalHeat = 0
+                        }
+                    } else {
+                        // MYCROFT MAVERICK MODE: Pure MCMC Physics (No Parity Constraint)
+                        finalHeat = baseHeat.toInt()
+                    }
 
                     heatMap[x][y] = finalHeat
+
                     if (finalHeat > maxHeat) {
                         maxHeat = finalHeat
                         bestMoves = mutableListOf(Pair(x, y))
@@ -1322,131 +1349,247 @@ private object MycroftBot {
  */
 object MoriartyBot {
 
-    private var cachedModelBuffer: MappedByteBuffer? = null
+    private var cachedDefenseBuffer: java.nio.MappedByteBuffer? = null
+    private var cachedOffenseBuffer: java.nio.MappedByteBuffer? = null
 
-    private fun getModelBuffer(context: Context): MappedByteBuffer {
-        if (cachedModelBuffer == null) {
-            val fd = context.assets.openFd("moriarty_predictor.tflite")
-            FileInputStream(fd.fileDescriptor).channel.use { channel ->
-                cachedModelBuffer =
-                    channel.map(
-                        FileChannel.MapMode.READ_ONLY,
-                        fd.startOffset,
-                        fd.declaredLength
-                    )
+    private fun getModelBuffer(context: Context, isOffense: Boolean): java.nio.MappedByteBuffer {
+        val fileName = if (isOffense) "moriarty_offense.tflite" else "moriarty_defense.tflite"
+        if (isOffense) {
+            if (cachedOffenseBuffer == null) {
+                val fd = context.assets.openFd(fileName)
+                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                    cachedOffenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
+                }
             }
+            return cachedOffenseBuffer!!
+        } else {
+            if (cachedDefenseBuffer == null) {
+                val fd = context.assets.openFd(fileName)
+                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                    cachedDefenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
+                }
+            }
+            return cachedDefenseBuffer!!
         }
-        return cachedModelBuffer!!
     }
 
-    /**
-     * Extracts the human's last 5 games, passes them through the Transformer,
-     * and returns a 10x10 FloatArray of Bayesian multipliers.
-     */
+    private fun getShipWeight(result: String): Float {
+        return when (result) {
+            "Carrier" -> 1.0f
+            "Battleship" -> 0.8f
+            "Cruiser", "Submarine" -> 0.6f
+            "Destroyer" -> 0.4f
+            else -> 0.5f
+        }
+    }
+
+    private fun buildMultiChannelTensor(
+        targetPlayer: String,
+        allGames: List<Game>,
+        allMoves: List<Move>,
+        liveMoves: List<Move>?,
+        limitTimestamp: Long?
+    ): FloatArray? {
+        val validGames = allGames.filter {
+            (it.playerName.equals(targetPlayer, ignoreCase = true) || it.opponentName.equals(targetPlayer, ignoreCase = true)) &&
+                    it.result != null &&
+                    (limitTimestamp == null || it.timestamp < limitTimestamp)
+        }.sortedBy { it.timestamp }
+
+        if (validGames.size < 5) return null
+        val historySlice = validGames.takeLast(5)
+        val movesByGameId = allMoves.groupBy { it.gameId }
+
+        val stepsCount = if (liveMoves != null) 6 else 5
+        val flatTensor = FloatArray(stepsCount * 5 * 10 * 10)
+        var tensorIdx = 0
+
+        var cumulativeTrauma = Array(10) { FloatArray(10) { 0.0f } }
+
+        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, isLiveStep: Boolean) {
+            val playerIsP1 = if (isLiveStep) true else (gameMoves.firstOrNull()?.let { m ->
+                val g = validGames.find { it.id == m.gameId }
+                g?.playerName.equals(targetPlayer, ignoreCase = true)
+            } ?: true)
+
+            // THE FIX: Use the isOffense boolean mapped against the player's seat!
+            val humanShots = gameMoves.filter { m ->
+                (m.isOffense == playerIsP1) && !isShipData(m.result)
+            }.sortedBy { it.shotNumber }
+
+            val humanShips = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && isShipData(m.result)
+            }
+
+            val chProjection = Array(10) { FloatArray(10) { 0.0f } }
+            val chClustering = Array(10) { FloatArray(10) { 0.0f } }
+            val chChronology = Array(10) { FloatArray(10) { 0.0f } }
+            val chSpatial = Array(10) { FloatArray(10) { 0.0f } }
+
+            val totalShots = humanShots.size
+            val hitQueue = mutableListOf<Pair<Int, Int>>()
+
+            humanShots.forEachIndexed { index, move ->
+                if (move.x in 0..9 && move.y in 0..9) {
+                    chProjection[move.x][move.y] = 1.0f
+                    if (totalShots > 1) {
+                        chChronology[move.x][move.y] = index.toFloat() / (totalShots - 1).toFloat()
+                    }
+                    val isHit = move.result == "HIT" || move.isSunk
+                    if (isHit) {
+                        chClustering[move.x][move.y] = 1.0f
+                        hitQueue.add(Pair(move.x, move.y))
+                    } else {
+                        for ((hx, hy) in hitQueue) {
+                            if (Math.abs(hx - move.x) <= 1 && Math.abs(hy - move.y) <= 1) {
+                                chClustering[move.x][move.y] = 0.5f
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!isLiveStep) {
+                humanShips.forEach { move ->
+                    if (move.x in 0..9 && move.y in 0..9) {
+                        chSpatial[move.x][move.y] = getShipWeight(move.result)
+                    }
+                }
+            }
+
+            for (ch in 0..4) {
+                for (y in 0..9) {
+                    for (x in 0..9) {
+                        flatTensor[tensorIdx++] = when (ch) {
+                            0 -> traumaMatrix[x][y]
+                            1 -> chProjection[x][y]
+                            2 -> chClustering[x][y]
+                            3 -> chChronology[x][y]
+                            else -> chSpatial[x][y]
+                        }
+                    }
+                }
+            }
+        }
+
+        for (game in historySlice) {
+            val gameMoves = movesByGameId[game.id] ?: emptyList()
+            bakeChannels(gameMoves, cumulativeTrauma, isLiveStep = false)
+
+            val playerIsP1 = game.playerName.equals(targetPlayer, ignoreCase = true)
+            val botShots = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && !isShipData(m.result)
+            }
+
+            val currentBotShots = Array(10) { FloatArray(10) { 0.0f } }
+            botShots.forEach { if (it.x in 0..9 && it.y in 0..9) currentBotShots[it.x][it.y] += 1.0f }
+
+            for (x in 0..9) {
+                for (y in 0..9) {
+                    cumulativeTrauma[x][y] = (cumulativeTrauma[x][y] * 0.85f) + currentBotShots[x][y]
+                }
+            }
+        }
+
+        if (liveMoves != null) {
+            bakeChannels(liveMoves, cumulativeTrauma, isLiveStep = true)
+        }
+
+        return flatTensor
+    }
+
     fun getPsychologicalPrior(
         context: Context,
         playerName: String,
         allGames: List<Game>,
         allMoves: List<Move>,
+        liveMoves: List<Move>? = null,
         limitTimestamp: Long? = null
     ): Array<FloatArray>? {
+        val isOffense = (liveMoves != null)
+        val flatData = buildMultiChannelTensor(playerName, allGames, allMoves, liveMoves, limitTimestamp) ?: return null
 
-        // 1. Build the chronological sequence of the human's last 5 games
-        val history = extractPlayerHistory(playerName, allGames, allMoves, limitTimestamp)
+        val steps = if (isOffense) 6 else 5
+        val totalBytes = steps * 5 * 10 * 10 * 4
 
-        // If the human hasn't played 5 games yet, we cannot run sequence prediction.
-        if (history.size < 5) return null
-
-        // Slice the exact last 5 games
-        val sequence = history.takeLast(5)
-
-        // 2. Initialize the TFLite Interpreter
-        val interpreter = Interpreter(getModelBuffer(context))
-
-        // 3. Prepare the Input Tensor: [1 (Batch), 5 (Sequence), 101 (Features)]
-        // 1 * 5 * 101 * 4 bytes per float = 2020 bytes
-        val inputBuffer = ByteBuffer.allocateDirect(1 * 5 * 101 * 4).apply {
-            order(ByteOrder.nativeOrder())
+        val inputBuffer = java.nio.ByteBuffer.allocateDirect(totalBytes).apply {
+            order(java.nio.ByteOrder.nativeOrder())
         }
-
-        for ((grid100, humanWon) in sequence) {
-            for (i in 0 until 100) {
-                inputBuffer.putFloat(grid100[i].toFloat())
-            }
-            inputBuffer.putFloat(if (humanWon) 1.0f else 0.0f) // The 101st feature
-        }
+        flatData.forEach { inputBuffer.putFloat(it) }
         inputBuffer.rewind()
 
-        // 4. Prepare the Output Tensor: [1 (Batch), 100 (Logits)]
         val outputBuffer = Array(1) { FloatArray(100) }
-
-        // 5. Run Inference
+        val interpreter = org.tensorflow.lite.Interpreter(getModelBuffer(context, isOffense))
         interpreter.run(inputBuffer, outputBuffer)
         interpreter.close()
 
         val logits = outputBuffer[0]
-
-        // 6. Apply Sigmoid Activation & Normalize to Multipliers
-        val probabilities = FloatArray(100) { i -> sigmoid(logits[i]) }
+        val probabilities = FloatArray(100) { i -> (1.0 / (1.0 + Math.exp(-logits[i].toDouble()))).toFloat() }
         val averageProb = probabilities.average().toFloat()
 
         val priorMap = Array(10) { FloatArray(10) { 1.0f } }
-
         for (y in 0 until 10) {
             for (x in 0 until 10) {
                 val flatIndex = y * 10 + x
-                // Normalize against the average to create a multiplier (e.g., 0.8x, 1.3x)
-                val multiplier =
-                    if (averageProb > 0f) probabilities[flatIndex] / averageProb else 1.0f
-                priorMap[x][y] = multiplier
+                priorMap[x][y] = if (averageProb > 0f) probabilities[flatIndex] / averageProb else 1.0f
             }
         }
-
         return priorMap
     }
 
-    private fun sigmoid(x: Float): Float {
-        return (1.0 / (1.0 + Math.exp(-x.toDouble()))).toFloat()
-    }
+    fun generatePhantomFleet(defensivePrior: Array<FloatArray>?): List<Ship> {
+        val safePrior = defensivePrior ?: Array(10) { FloatArray(10) { 1.0f } }
+        val shipSpecs = listOf(Pair(5, "Carrier"), Pair(4, "Battleship"), Pair(3, "Cruiser"), Pair(3, "Submarine"), Pair(2, "Destroyer"))
+        val fleet = mutableListOf<Ship>()
+        val grid = Array(10) { BooleanArray(10) { false } }
 
-    private fun extractPlayerHistory(
-        targetPlayer: String,
-        allGames: List<Game>,
-        allMoves: List<Move>,
-        limitTimestamp: Long?
-    ): List<Pair<IntArray, Boolean>> {
-        val validGames = allGames.filter {
-            (it.playerName == targetPlayer || it.opponentName == targetPlayer) &&
-                    it.result != null && // Must be finished
-                    (limitTimestamp == null || it.timestamp < limitTimestamp)
-        }.sortedBy { it.timestamp } // Strict chronological order
+        for ((size, name) in shipSpecs) {
+            val validPlacements = mutableListOf<Triple<Int, Int, Boolean>>()
+            val heatScores = mutableListOf<Float>()
 
-        val movesByGameId = allMoves.groupBy { it.gameId }
-        val history = mutableListOf<Pair<IntArray, Boolean>>()
+            for (isVertical in listOf(true, false)) {
+                val maxX = if (isVertical) 10 else 10 - size + 1
+                val maxY = if (isVertical) 10 - size + 1 else 10
 
-        for (game in validGames) {
-            val gameMoves = movesByGameId[game.id] ?: continue
-            val isP1 = game.playerName == targetPlayer
-            val isP2 = game.opponentName == targetPlayer
+                for (x in 0 until maxX) {
+                    for (y in 0 until maxY) {
+                        var collision = false
+                        var currentHeat = 0.0f
 
-            // Extract the human's secret ship placements
-            val humanShips = gameMoves.filter { move ->
-                isShipData(move.result) && ((isP1 && !move.isOffense) || (isP2 && move.isOffense))
-            }
+                        for (i in 0 until size) {
+                            val cx = x + if (!isVertical) i else 0
+                            val cy = y + if (isVertical) i else 0
+                            if (grid[cx][cy]) { collision = true; break }
+                            currentHeat += safePrior[cx][cy]
+                        }
 
-            if (humanShips.isEmpty()) continue
-
-            val humanWon = (isP1 && game.result == "WIN") || (isP2 && game.result == "LOSS")
-
-            val grid100 = IntArray(100) { 0 }
-            for (peg in humanShips) {
-                if (peg.x in 0..9 && peg.y in 0..9) {
-                    val flatIndex = peg.y * 10 + peg.x
-                    grid100[flatIndex] = 1
+                        if (!collision) {
+                            validPlacements.add(Triple(x, y, isVertical))
+                            heatScores.add(currentHeat)
+                        }
+                    }
                 }
             }
-            history.add(Pair(grid100, humanWon))
+
+            if (validPlacements.isNotEmpty()) {
+                val indexedPlacements = validPlacements.indices.map { i -> Pair(i, heatScores[i]) }
+                    .sortedBy { it.second }
+
+                val poolSize = maxOf(1, (indexedPlacements.size * 0.15f).toInt())
+                val candidatePool = indexedPlacements.take(poolSize)
+
+                val chosenIndex = candidatePool.random().first
+                val (px, py, bestIsVertical) = validPlacements[chosenIndex]
+
+                for (i in 0 until size) {
+                    val cx = px + if (!bestIsVertical) i else 0
+                    val cy = py + if (bestIsVertical) i else 0
+                    grid[cx][cy] = true
+                }
+                fleet.add(Ship(name = name, size = size, x = px.toFloat(), y = py.toFloat(), isVertical = bestIsVertical, isPlaced = true))
+            }
         }
-        return history
+        return fleet
     }
 }

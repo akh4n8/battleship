@@ -329,7 +329,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
 
             if (opponentName.contains("Moriarty", ignoreCase = true) || playerName.contains("Moriarty", ignoreCase = true)) {
                 val human = if (opponentName.contains("Moriarty", ignoreCase = true)) playerName else opponentName
-                mlPrior = com.ak.battleship.ai.MoriartyBot.getPsychologicalPrior(context, human, allGames, allMoves)
+                mlPrior = com.ak.battleship.ai.MoriartyBot.getPsychologicalPrior(context, human, allGames, allMoves, liveMoves = null)
             } else if (opponentName.contains("Adler", ignoreCase = true) || playerName.contains("Adler", ignoreCase = true)) {
                 val human = if (opponentName.contains("Adler", ignoreCase = true)) playerName else opponentName
                 val (o, d) = calculatePriorsForPlayer(human, allGames, allMoves)
@@ -412,7 +412,14 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
                     val metadataMap = mutableMapOf<String, String>()
 
                     if (isMoriarty) {
-                        val mlPrior = com.ak.battleship.ai.MoriartyBot.getPsychologicalPrior(context, humanName, allGames, allMoves, currentLocalGame.timestamp)
+                        // THE FIX: Explicitly name limitTimestamp to bypass the liveMoves slot!
+                        val mlPrior = com.ak.battleship.ai.MoriartyBot.getPsychologicalPrior(
+                            context = context,
+                            playerName = humanName,
+                            allGames = allGames,
+                            allMoves = allMoves,
+                            limitTimestamp = currentLocalGame.timestamp
+                        )
                         moriartyPriorMatrix = mlPrior
                         if (mlPrior != null) metadataMap["moriarty_prior"] = serializeMatrix(mlPrior)
                     } else {
@@ -893,8 +900,17 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             val startTime = System.currentTimeMillis()
             val botMovesSoFar = _currentMoves.value.filter { !it.isOffense && (it.result == "HIT" || it.result == "MISS") }
 
-            // UPGRADED: Pass the human player's explicit name into the router
-            // Inside BattleshipViewModel.kt -> executeBotTurnLoop
+            if (currentGame?.opponentName?.contains("Moriarty", ignoreCase = true) == true) {
+                val allGames = dao.getAllGamesSync()
+                moriartyPriorMatrix = com.ak.battleship.ai.MoriartyBot.getPsychologicalPrior(
+                    context = context,
+                    playerName = currentGame?.playerName ?: "Player 1",
+                    allGames = allGames,
+                    allMoves = dao.getAllMovesSync(),
+                    liveMoves = _currentMoves.value
+                )
+            }
+
             val decision = TacticalEngine.getBestMove(
                 opponentName = currentGame?.opponentName ?: "Unknown",
                 playerName = currentGame?.playerName ?: "Player 1",
@@ -902,7 +918,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
                 context = context,
                 gameId = currentGameId ?: 0,
                 adlerOffensivePrior = adlerOffensiveMatrix,
-                moriartyPrior = moriartyPriorMatrix // <-- NEW
+                moriartyPrior = moriartyPriorMatrix
             )
 
             lastBotDecision = decision.log
@@ -1209,7 +1225,7 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         val specificContexts = mutableListOf<HumanMatchContext>()
 
         val humanGames = allGames.filter {
-            (it.playerName == human || it.opponentName == human) &&
+            (it.playerName.equals(human, ignoreCase = true) || it.opponentName.equals(human, ignoreCase = true)) &&
                     (limitTimestamp == null || it.timestamp < limitTimestamp)
         }
 
@@ -1217,14 +1233,12 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
         val movesByGameId = allMoves.groupBy { it.gameId }
 
         for (game in humanGames) {
-            // THE FIX: Instantly look up the game's moves using the dictionary key!
             val gameMoves = movesByGameId[game.id] ?: emptyList()
-
             if (gameMoves.isEmpty()) continue
 
             // Determine which seat the human was sitting in
-            val isP1 = game.playerName == human
-            val isP2 = game.opponentName == human
+            val isP1 = game.playerName.equals(human, ignoreCase = true)
+            val isP2 = game.opponentName.equals(human, ignoreCase = true)
 
             // Extract the human's exact ships
             val humanShips = gameMoves.filter { move ->
