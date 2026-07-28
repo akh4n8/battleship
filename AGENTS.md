@@ -50,8 +50,20 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 
 ### 3. AI & Diagnostics Protocol (Mathematical Determinism)
 * **Deterministic Parity:** The checkerboard hunting pattern MUST be derived precisely via `gameId % 2`. This prevents visual flickering and layout shifts during replays.
+* **Moriarty Confidence Fallback (Strict):** Moriarty V2 utilizes a 7-channel neural network. If the prediction confidence ratio (maxProb / avgProb) falls below 1.3, it MUST fall back to Mycroft's MCMC "Maverick Mode" (preserving the deterministic parity logic).
 * **Deterministic Tie-Breaking:** All `random()` calls during AI hunts must use `kotlin.random.Random((gameId * 10000) + moves.size)`. This unbreakable seed guarantees 100% mathematical reproducibility for every single shot in history.
 * **Linear Kill Synchronization:** The UI `getLiveHeatmap` must explicitly spike Linear Kill targets to `100` so the visual heatmap aligns perfectly with the bot's target coordinate.
+
+---
+
+## 🛑 STRICT RULES OF ENGAGEMENT (ML PIPELINE)
+
+### 1. Windows Python Execution
+* **UTF-8 Requirement:** When running Python training scripts (`train.py`, `model.py`) via PowerShell on Windows, ALWAYS set `$env:PYTHONIOENCODING="utf-8"` before execution to prevent `cp1252` encoding crashes when outputting emojis (e.g. ✅).
+
+### 2. ONNX & TFLite Conversion
+* **onnx2tf Syntax:** Do NOT use the deprecated `--overwrite_training_parameters` flag with modern `onnx2tf` versions.
+* **TFLite Environment:** When running `onnx2tf` for TFLite conversion, you MUST use `ai-edge-litert` (v2.14.0+) rather than generic `tflite-runtime` or `tensorflow`, or the layer normalizations will fail.
 
 ---
 
