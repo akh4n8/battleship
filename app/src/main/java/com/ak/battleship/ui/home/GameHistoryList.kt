@@ -22,6 +22,8 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
+import com.ak.battleship.ui.getPlayerColor
+import com.ak.battleship.ui.partitionPlayers
 
 @Composable
 fun HomeFilterRow(
@@ -78,39 +80,69 @@ fun HomeFilterRow(
 
             // 1. Player Filter
             Box {
-                AssistChip(onClick = { expandedPlayerFilterMenu = true }, label = { Text(if (currentPlayerFilter == "All") "Player: All" else "Player: $currentPlayerFilter") })
+                AssistChip(
+                    onClick = { expandedPlayerFilterMenu = true },
+                    label = { Text(if (currentPlayerFilter == "All") "Player: All" else "Player: $currentPlayerFilter") }
+                )
                 DropdownMenu(expanded = expandedPlayerFilterMenu, onDismissRequest = { expandedPlayerFilterMenu = false }) {
                     DropdownMenuItem(text = { Text("Show All Players") }, onClick = { onPlayerFilterChange("All"); expandedPlayerFilterMenu = false })
                     HorizontalDivider()
-                    historyPlayerSuggestions.forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = { onPlayerFilterChange(name); expandedPlayerFilterMenu = false }) }
+
+                    val (humans, bots) = remember(historyPlayerSuggestions) { partitionPlayers(historyPlayerSuggestions) }
+
+                    // Render Humans
+                    humans.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { onPlayerFilterChange(name); expandedPlayerFilterMenu = false }
+                        )
+                    }
+
+                    // Divider between sections if both contain elements
+                    if (humans.isNotEmpty() && bots.isNotEmpty()) {
+                        HorizontalDivider()
+                    }
+
+                    // Render Bots
+                    bots.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { onPlayerFilterChange(name); expandedPlayerFilterMenu = false }
+                        )
+                    }
                 }
             }
 
             // 2. Opponent Filter
             Box {
-                AssistChip(onClick = { expandedOpponentFilterMenu = true }, label = { Text(if (currentOpponentFilter == "All") "Opponent: All" else "Opp: $currentOpponentFilter") })
+                AssistChip(
+                    onClick = { expandedOpponentFilterMenu = true },
+                    label = { Text(if (currentOpponentFilter == "All") "Opponent: All" else "Opp: $currentOpponentFilter") }
+                )
                 DropdownMenu(expanded = expandedOpponentFilterMenu, onDismissRequest = { expandedOpponentFilterMenu = false }) {
-
-                    val humans = historyOpponentSuggestions.filterNot { it.contains("Bot", ignoreCase = true) }
-                    val bots = historyOpponentSuggestions.filter { it.contains("Bot", ignoreCase = true) }
-
                     DropdownMenuItem(text = { Text("Show All Opponents") }, onClick = { onOpponentFilterChange("All"); expandedOpponentFilterMenu = false })
+                    HorizontalDivider()
 
-                    if (humans.isNotEmpty()) {
-                        HorizontalDivider()
-                        humans.forEach { name ->
-                            DropdownMenuItem(text = { Text(name) }, onClick = { onOpponentFilterChange(name); expandedOpponentFilterMenu = false })
-                        }
+                    val (humans, bots) = remember(historyOpponentSuggestions) { partitionPlayers(historyOpponentSuggestions) }
+
+                    // Render Humans
+                    humans.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { onOpponentFilterChange(name); expandedOpponentFilterMenu = false }
+                        )
                     }
 
-                    if (bots.isNotEmpty()) {
+                    if (humans.isNotEmpty() && bots.isNotEmpty()) {
                         HorizontalDivider()
-                        bots.forEach { name ->
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = { onOpponentFilterChange(name); expandedOpponentFilterMenu = false }
-                            )
-                        }
+                    }
+
+                    // Render Bots
+                    bots.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = getPlayerColor(name), fontWeight = FontWeight.Medium) },
+                            onClick = { onOpponentFilterChange(name); expandedOpponentFilterMenu = false }
+                        )
                     }
                 }
             }
@@ -159,7 +191,14 @@ fun GameHistoryList(
             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onLoadGame(game.id) }) {
                 Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("${game.playerName} vs ${game.opponentName}", fontWeight = FontWeight.Bold)
+
+                        // Replaced single string with colored Row
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(game.playerName, color = getPlayerColor(game.playerName), fontWeight = FontWeight.Bold)
+                            Text(" vs ", fontWeight = FontWeight.Bold)
+                            Text(game.opponentName, color = getPlayerColor(game.opponentName), fontWeight = FontWeight.Bold)
+                        }
+
                         Text("${game.gameMode}  •  ${historyDateFormatter.format(Date(game.timestamp))}", fontSize = 12.sp, color = Color.Gray)
                         if (game.result != null) {
                             Text("Result: ${game.result}", color = if (game.result == "WIN") Color(0xFF388E3C) else Color(0xFFD32F2F), fontSize = 12.sp)

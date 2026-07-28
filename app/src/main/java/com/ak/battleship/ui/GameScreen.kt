@@ -166,15 +166,23 @@ fun GameScreen(viewModel: BattleshipViewModel) {
         } else null
     }
 
-    val activeHeatmap = remember(moves.size, viewModel.isHeatmapVisible, isBotGame, game?.opponentName, viewModel.adlerOffensiveMatrix) {
+    val activeHeatmap = remember(
+        moves.size,
+        viewModel.isHeatmapVisible,
+        isBotGame,
+        game?.opponentName,
+        viewModel.adlerOffensiveMatrix,
+        viewModel.moriartyPriorMatrix // <-- THE MISSING KEY: Compose will now redraw when Moriarty finishes thinking!
+    ) {
         if (viewModel.isHeatmapVisible && isBotGame) {
             val botMovesSoFar = moves.filter { !it.isOffense && !isShipData(it.result) }
             TacticalEngine.getLiveHeatmap(
                 opponentName = game?.opponentName ?: "Unknown",
                 moves = botMovesSoFar,
                 context = context,
-                gameId = game?.id ?: 0, // <-- THE FIX
-                adlerOffensivePrior = viewModel.adlerOffensiveMatrix
+                gameId = game?.id ?: 0,
+                adlerOffensivePrior = viewModel.adlerOffensiveMatrix,
+                moriartyPrior = viewModel.moriartyPriorMatrix
             )
         } else null
     }

@@ -5,8 +5,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.ak.battleship.data.Game
+import com.ak.battleship.ui.getPlayerColor
 
 @Composable
 fun DeleteGameDialog(
@@ -14,10 +17,21 @@ fun DeleteGameDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Inside DeleteGameDialog:
+    val opponentColor = getPlayerColor(game.opponentName)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete Game") },
-        text = { Text("Are you sure you want to delete this game against ${game.opponentName}?") },
+        text = {
+            Text(androidx.compose.ui.text.buildAnnotatedString {
+                append("Are you sure you want to delete this game against ")
+                withStyle(androidx.compose.ui.text.SpanStyle(color = opponentColor, fontWeight = FontWeight.Bold)) {
+                    append(game.opponentName)
+                }
+                append("?")
+            })
+        },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = Color.Red) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -38,17 +52,21 @@ fun RenameGameDialog(
         title = { Text("Edit Match Details") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Inside RenameGameDialog:
                 OutlinedTextField(
                     value = newPlayerName,
                     onValueChange = { newPlayerName = it },
                     label = { Text("Player Name") },
+                    textStyle = LocalTextStyle.current.copy(color = getPlayerColor(newPlayerName)), // Colors text as they type!
                     singleLine = true
                 )
+
                 OutlinedTextField(
                     value = if (game.gameMode == "Bot") game.opponentName else newOpponentName,
                     onValueChange = { if (game.gameMode != "Bot") newOpponentName = it },
                     label = { Text(if (game.gameMode == "Bot") "Opponent (Bot - Locked)" else "Opponent Name") },
-                    enabled = game.gameMode != "Bot", // Disables the UI interaction
+                    textStyle = LocalTextStyle.current.copy(color = getPlayerColor(if (game.gameMode == "Bot") game.opponentName else newOpponentName)),
+                    enabled = game.gameMode != "Bot",
                     modifier = Modifier.fillMaxWidth()
                 )
 

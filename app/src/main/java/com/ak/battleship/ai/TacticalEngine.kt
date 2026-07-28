@@ -1,6 +1,7 @@
 package com.ak.battleship.ai
 
 import android.content.Context
+import com.ak.battleship.data.Game
 import com.ak.battleship.data.Move
 import com.ak.battleship.model.BotDecision
 import com.ak.battleship.model.Ship
@@ -13,7 +14,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
-import kotlin.math.abs
 import kotlin.random.Random
 import androidx.annotation.VisibleForTesting
 
@@ -28,22 +28,25 @@ object TacticalEngine {
         playerName: String,
         botMovesSoFar: List<Move>,
         context: Context,
-        gameId: Int, // <-- NEW
-        adlerOffensivePrior: Array<FloatArray>? = null
+        gameId: Int,
+        adlerOffensivePrior: Array<FloatArray>? = null,
+        moriartyPrior: Array<FloatArray>? = null
     ): BotDecision {
         return withContext(Dispatchers.Default) {
             when {
                 opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getBestMove(botMovesSoFar, adlerOffensivePrior, playerName, gameId)
                 opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getBestMove(botMovesSoFar, gameId)
                 opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getBestMove(botMovesSoFar)
-                opponentName.contains("Mycroft", ignoreCase = true) -> MycroftBot.getBestMove(botMovesSoFar, gameId)
-                opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getBestMove(botMovesSoFar, context)
+
+                // THE FIX: Explicitly route Moriarty to Mycroft's MCMC engine!
+                opponentName.contains("Mycroft", ignoreCase = true) || opponentName.contains("Moriarty", ignoreCase = true) ->
+                    MycroftBot.getBestMove(botMovesSoFar, gameId, moriartyPrior, isMoriarty = opponentName.contains("Moriarty", ignoreCase = true))
+
                 else -> {
-                    val densityBot = DensityBot()
-                    BotDecision(
-                        coordinate = densityBot.getBestMove(botMovesSoFar),
+                    val densityBot = WatsonBot
+                    densityBot.getBestMove(botMovesSoFar).copy(
                         log = "Standard Density Map",
-                        heatMap = densityBot.getRawDensityMap(botMovesSoFar)
+                        heatMap = densityBot.getLiveHeatmap(botMovesSoFar)
                     )
                 }
             }
@@ -51,10 +54,12 @@ object TacticalEngine {
     }
 
     fun generateBotFleet(opponentName: String, adlerDefensivePrior: Array<FloatArray>? = null): List<Ship> {
-        return if (opponentName.contains("Adler", ignoreCase = true)) {
-            AdlerBot.generatePhantomFleet(adlerDefensivePrior)
-        } else {
-            generateRandomBotFleet()
+        return when {
+            // Adler keeps her rigid, exploitable pure-Bayesian algorithm
+            opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.generatePhantomFleet(adlerDefensivePrior)
+            // Moriarty gets the new Entropy-Maximized logic (ready for an ML prior!)
+            opponentName.contains("Moriarty", ignoreCase = true) -> MoriartyBot.generatePhantomFleet(adlerDefensivePrior)
+            else -> generateRandomBotFleet()
         }
     }
 
@@ -107,14 +112,24 @@ object TacticalEngine {
         }
     }
 
-    fun getLiveHeatmap(opponentName: String, moves: List<Move>, context: Context, gameId: Int, adlerOffensivePrior: Array<FloatArray>? = null): Array<IntArray>? { // <-- UPDATED
+    fun getLiveHeatmap(
+        opponentName: String,
+        moves: List<Move>,
+        context: Context,
+        gameId: Int,
+        adlerOffensivePrior: Array<FloatArray>? = null,
+        moriartyPrior: Array<FloatArray>? = null
+    ): Array<IntArray>? {
         return when {
             opponentName.contains("Adler", ignoreCase = true) -> AdlerBot.getLiveHeatmap(moves, gameId, adlerOffensivePrior)
             opponentName.contains("Sherlock", ignoreCase = true) -> SherlockBot.getLiveHeatmap(moves, gameId)
             opponentName.contains("Watson", ignoreCase = true) -> WatsonBot.getLiveHeatmap(moves)
-            opponentName.contains("Mycroft", ignoreCase = true) -> MycroftBot.getLiveHeatmap(moves, gameId)
-            opponentName.contains("Nemesis", ignoreCase = true) -> NemesisBot.getLiveHeatmap(moves, context)
-            else -> DensityBot().getLiveHeatmap(moves)
+
+            // THE FIX: Route Moriarty's Heatmap to Mycroft too!
+            opponentName.contains("Mycroft", ignoreCase = true) || opponentName.contains("Moriarty", ignoreCase = true) ->
+                MycroftBot.getLiveHeatmap(moves, gameId, moriartyPrior)
+
+            else -> WatsonBot.getLiveHeatmap(moves)
         }
     }
 }
@@ -299,12 +314,11 @@ internal object DeductionEngine {
         return placements
     }
 
-    // THE FIX: Add the random generator to the signature
     fun executeLinearKill(
         board: Array<IntArray>,
         activeHits: List<Pair<Int, Int>>,
         claimedHits: Set<Pair<Int, Int>>,
-        random: kotlin.random.Random // <-- NEW
+        random: kotlin.random.Random
     ): Pair<Int, Int>? {
         val prunedHits = activeHits.filter { !claimedHits.contains(it) }
         val unvisited = prunedHits.toMutableSet()
@@ -331,7 +345,7 @@ internal object DeductionEngine {
 
             if (cluster.size == 1) {
                 val validTargets = getUnknownNeighbors(board, cluster.first())
-                if (validTargets.isNotEmpty()) return validTargets.random(random) // <-- UPDATED
+                if (validTargets.isNotEmpty()) return validTargets.random(random)
 
             } else if (ys.size == 1) {
                 val y = ys.first()
@@ -345,7 +359,7 @@ internal object DeductionEngine {
                 while (xMax <= 9 && board[xMax][y] == CELL_HIT) xMax++
                 if (xMax <= 9 && board[xMax][y] == CELL_UNKNOWN) endpoints.add(Pair(xMax, y))
 
-                if (endpoints.isNotEmpty()) return endpoints.random(random) // <-- UPDATED
+                if (endpoints.isNotEmpty()) return endpoints.random(random)
 
             } else if (xs.size == 1) {
                 val x = xs.first()
@@ -359,7 +373,7 @@ internal object DeductionEngine {
                 while (yMax <= 9 && board[x][yMax] == CELL_HIT) yMax++
                 if (yMax <= 9 && board[x][yMax] == CELL_UNKNOWN) endpoints.add(Pair(x, yMax))
 
-                if (endpoints.isNotEmpty()) return endpoints.random(random) // <-- UPDATED
+                if (endpoints.isNotEmpty()) return endpoints.random(random)
 
             } else {
                 val validEndpoints = mutableListOf<Pair<Int, Int>>()
@@ -378,12 +392,12 @@ internal object DeductionEngine {
                         }
                     }
                 }
-                if (validEndpoints.isNotEmpty()) return validEndpoints.random(random) // <-- UPDATED
+                if (validEndpoints.isNotEmpty()) return validEndpoints.random(random)
             }
 
             for (hit in cluster) {
                 val validTargets = getUnknownNeighbors(board, hit)
-                if (validTargets.isNotEmpty()) return validTargets.random(random) // <-- UPDATED
+                if (validTargets.isNotEmpty()) return validTargets.random(random)
             }
         }
         return null
@@ -569,7 +583,6 @@ private object SherlockBot {
         return if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
     }
 
-    // THESE WERE ACCIDENTALLY DELETED - RESTORED HERE:
     fun getLiveDiagnostics(moves: List<Move>): Pair<List<List<Pair<Int, Int>>>, List<Pair<Int, Int>>> {
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
@@ -895,315 +908,14 @@ private object WatsonBot {
 }
 
 // ==========================================
-// BOT 4: STANDARD DENSITY (FALLBACK)
-// ==========================================
-
-private class DensityBot {
-    private val CELL_UNKNOWN = 0
-    private val CELL_MISS = -1
-    private val CELL_HIT = 1
-    private val CELL_SUNK = -2
-    private val initialFleetSizes = listOf(5, 4, 3, 3, 2)
-    private data class Point(val x: Int, val y: Int)
-
-    fun getBestMove(botMoves: List<Move>): Pair<Int, Int> {
-        val intBoard = getBoardState(botMoves)
-        val densityMap = getRawDensityMap(botMoves)
-
-        var bestHuntScore = 0
-        val bestHuntMoves = mutableListOf<Pair<Int, Int>>()
-        val directions = listOf(Pair(0, -1), Pair(0, 1), Pair(-1, 0), Pair(1, 0))
-
-        for (x in 0 until 10) {
-            for (y in 0 until 10) {
-                if (intBoard[x][y] == CELL_HIT) {
-                    for (dir in directions) {
-                        var currentX = x + dir.first
-                        var currentY = y + dir.second
-                        var rayScore = 1
-
-                        while (currentX in 0..9 && currentY in 0..9 && intBoard[currentX][currentY] == CELL_HIT) {
-                            rayScore++
-                            currentX += dir.first
-                            currentY += dir.second
-                        }
-
-                        if (currentX in 0..9 && currentY in 0..9 && intBoard[currentX][currentY] == CELL_UNKNOWN) {
-                            val target = Pair(currentX, currentY)
-                            if (rayScore > bestHuntScore) {
-                                bestHuntScore = rayScore
-                                bestHuntMoves.clear()
-                                bestHuntMoves.add(target)
-                            } else if (rayScore == bestHuntScore) {
-                                if (!bestHuntMoves.contains(target)) bestHuntMoves.add(target)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (bestHuntMoves.isNotEmpty()) {
-            return bestHuntMoves.maxByOrNull { densityMap[it.first][it.second] } ?: bestHuntMoves.random()
-        }
-
-        var maxDensity = -1
-        val bestDensityMoves = mutableListOf<Pair<Int, Int>>()
-
-        for (x in 0 until 10) {
-            for (y in 0 until 10) {
-                if (intBoard[x][y] == CELL_UNKNOWN) {
-                    if ((x + y) % 2 != 0) continue
-
-                    var currentDensity = densityMap[x][y]
-                    if (x == 0 || x == 9 || y == 0 || y == 9) currentDensity = (currentDensity * 1.2).toInt()
-
-                    if (currentDensity > maxDensity) {
-                        maxDensity = currentDensity
-                        bestDensityMoves.clear()
-                        bestDensityMoves.add(Pair(x, y))
-                    } else if (currentDensity == maxDensity) {
-                        bestDensityMoves.add(Pair(x, y))
-                    }
-                }
-            }
-        }
-
-        if (bestDensityMoves.isEmpty()) {
-            for (x in 0 until 10) {
-                for (y in 0 until 10) {
-                    if (intBoard[x][y] == CELL_UNKNOWN) {
-                        var currentDensity = densityMap[x][y]
-                        if (x == 0 || x == 9 || y == 0 || y == 9) currentDensity = (currentDensity * 1.2).toInt()
-
-                        if (currentDensity > maxDensity) {
-                            maxDensity = currentDensity
-                            bestDensityMoves.clear()
-                            bestDensityMoves.add(Pair(x, y))
-                        } else if (currentDensity == maxDensity) {
-                            bestDensityMoves.add(Pair(x, y))
-                        }
-                    }
-                }
-            }
-        }
-
-        return if (bestDensityMoves.isNotEmpty()) bestDensityMoves.random() else Pair(0, 0)
-    }
-
-    fun getRawDensityMap(moves: List<Move>): Array<IntArray> {
-        val botMoves = moves.filter { !it.isOffense }
-        val board = getBoardState(botMoves)
-        val remainingShips = initialFleetSizes.toMutableList()
-        val densityMap = Array(10) { IntArray(10) { 0 } }
-
-        for (size in remainingShips.distinct()) {
-            for (x in 0 until 10) {
-                for (y in 0 until 10) {
-                    if (canFit(board, x, y, size, isHorizontal = true)) {
-                        val weight = calculateHypothesisWeight(board, x, y, size, isHorizontal = true)
-                        for (i in 0 until size) {
-                            if (board[x + i][y] == CELL_UNKNOWN) densityMap[x + i][y] += weight
-                        }
-                    }
-                    if (canFit(board, x, y, size, isHorizontal = false)) {
-                        val weight = calculateHypothesisWeight(board, x, y, size, isHorizontal = false)
-                        for (i in 0 until size) {
-                            if (board[x][y + i] == CELL_UNKNOWN) densityMap[x][y + i] += weight
-                        }
-                    }
-                }
-            }
-        }
-        return densityMap
-    }
-
-    private fun getBoardState(moves: List<Move>): Array<IntArray> {
-        val board = Array(10) { IntArray(10) { CELL_UNKNOWN } }
-        val remainingShips = initialFleetSizes.toMutableList()
-
-        moves.forEach { move ->
-            if (move.result == "MISS") {
-                board[move.x][move.y] = CELL_MISS
-            } else if (move.result == "HIT") {
-                board[move.x][move.y] = CELL_HIT
-                if (move.isSunk) {
-                    val extractedShip = extractShipFromCluster(board, Point(move.x, move.y), remainingShips)
-                    extractedShip.forEach { p -> board[p.x][p.y] = CELL_SUNK }
-                    val matchedSize = remainingShips.minByOrNull { abs(it - extractedShip.size) }
-                    if (matchedSize != null) remainingShips.remove(matchedSize)
-                }
-            }
-        }
-        return board
-    }
-
-    private fun extractShipFromCluster(board: Array<IntArray>, sunkPeg: Point, remainingShips: List<Int>): List<Point> {
-        val horizontal = mutableListOf(sunkPeg)
-        var left = sunkPeg.x - 1
-        while (left >= 0 && board[left][sunkPeg.y] == CELL_HIT) { horizontal.add(0, Point(left, sunkPeg.y)); left-- }
-        var right = sunkPeg.x + 1
-        while (right < 10 && board[right][sunkPeg.y] == CELL_HIT) { horizontal.add(Point(right, sunkPeg.y)); right++ }
-
-        val vertical = mutableListOf(sunkPeg)
-        var up = sunkPeg.y - 1
-        while (up >= 0 && board[sunkPeg.x][up] == CELL_HIT) { vertical.add(0, Point(sunkPeg.x, up)); up-- }
-        var down = sunkPeg.y + 1
-        while (down < 10 && board[sunkPeg.x][down] == CELL_HIT) { vertical.add(Point(sunkPeg.x, down)); down++ }
-
-        val bestHoriz = remainingShips.filter { it <= horizontal.size }.maxOrNull() ?: 0
-        val bestVert = remainingShips.filter { it <= vertical.size }.maxOrNull() ?: 0
-
-        val isHoriz = bestHoriz >= bestVert && bestHoriz > 0
-        val targetLine = if (isHoriz) horizontal else vertical
-        val finalSize = if (isHoriz) bestHoriz else if (bestVert > 0) bestVert else 1
-
-        val sunkIndex = targetLine.indexOf(sunkPeg)
-        var startIndex = sunkIndex - finalSize + 1
-        if (startIndex < 0) startIndex = 0
-
-        var endIndex = startIndex + finalSize
-        if (endIndex > targetLine.size) {
-            endIndex = targetLine.size
-            startIndex = endIndex - finalSize
-            if (startIndex < 0) startIndex = 0
-        }
-
-        return targetLine.subList(startIndex, endIndex)
-    }
-
-    private fun canFit(board: Array<IntArray>, x: Int, y: Int, size: Int, isHorizontal: Boolean): Boolean {
-        if (isHorizontal) {
-            if (x + size > 10) return false
-            for (i in 0 until size) { if (board[x + i][y] == CELL_MISS || board[x + i][y] == CELL_SUNK) return false }
-        } else {
-            if (y + size > 10) return false
-            for (i in 0 until size) { if (board[x][y + i] == CELL_MISS || board[x][y + i] == CELL_SUNK) return false }
-        }
-        return true
-    }
-
-    private fun calculateHypothesisWeight(board: Array<IntArray>, x: Int, y: Int, size: Int, isHorizontal: Boolean): Int {
-        var overlapHits = 0
-        for (i in 0 until size) {
-            val cx = if (isHorizontal) x + i else x
-            val cy = if (isHorizontal) y else y + i
-            if (board[cx][cy] == CELL_HIT) overlapHits++
-        }
-        return if (overlapHits > 0) 500 * overlapHits else 1
-    }
-
-    fun getLiveHeatmap(moves: List<Move>): Array<IntArray> {
-        return getRawDensityMap(moves)
-    }
-}
-
-// ==========================================
-// BOT 5: NEMESIS (REINFORCEMENT LEARNING)
-// ==========================================
-
-private object NemesisBot {
-    private const val CELL_UNKNOWN = 0
-    private const val CELL_MISS = 1
-    private const val CELL_HIT = 2
-    private const val CELL_SUNK = 3
-
-    private var cachedModelBuffer: MappedByteBuffer? = null
-
-    private fun getModelBuffer(context: Context): MappedByteBuffer {
-        if (cachedModelBuffer == null) {
-            val fd = context.assets.openFd("nemesis_rl_production.tflite")
-            FileInputStream(fd.fileDescriptor).channel.use { channel ->
-                cachedModelBuffer = channel.map(FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
-            }
-        }
-        return cachedModelBuffer!!
-    }
-
-    fun getBestMove(botMoves: List<Move>, context: Context): BotDecision {
-        val interpreter = Interpreter(getModelBuffer(context))
-        val board = getBoardState(botMoves)
-
-        val inputBuffer = ByteBuffer.allocateDirect(10 * 10 * 1 * 4).apply { order(ByteOrder.nativeOrder()) }
-
-        for (y in 0 until 10) {
-            for (x in 0 until 10) {
-                val pixelValue = when (board[x][y]) {
-                    CELL_UNKNOWN -> 0.0f
-                    CELL_MISS    -> 85.0f
-                    CELL_HIT     -> 170.0f
-                    CELL_SUNK    -> 255.0f
-                    else         -> 0.0f
-                }
-                inputBuffer.putFloat(pixelValue)
-            }
-        }
-
-        val outputBuffer = Array(1) { FloatArray(100) }
-        inputBuffer.rewind()
-        interpreter.run(inputBuffer, outputBuffer)
-        interpreter.close()
-
-        val logits = outputBuffer[0]
-        val intHeatmap = Array(10) { IntArray(10) { 0 } }
-        var bestX = -1
-        var bestY = -1
-        var highestLogit = -Float.MAX_VALUE
-
-        val minLogit = logits.minOrNull() ?: 0f
-        val maxLogit = logits.maxOrNull() ?: 1f
-        val logitRange = if (maxLogit - minLogit == 0f) 1f else maxLogit - minLogit
-
-        for (x in 0 until 10) {
-            for (y in 0 until 10) {
-                val flatIndex = y * 10 + x
-                val logitValue = logits[flatIndex]
-                val normalizedScore = ((logitValue - minLogit) / logitRange) * 100
-                intHeatmap[x][y] = normalizedScore.toInt()
-
-                if (board[x][y] == CELL_UNKNOWN && logitValue > highestLogit) {
-                    highestLogit = logitValue
-                    bestX = x
-                    bestY = y
-                }
-            }
-        }
-
-        if (bestX == -1) bestX = 0
-        if (bestY == -1) bestY = 0
-
-        return BotDecision(Pair(bestX, bestY), "Nemesis RL Engine Engaged. Node weight: $highestLogit", intHeatmap)
-    }
-
-    private fun getBoardState(moves: List<Move>): Array<IntArray> {
-        val board = Array(10) { IntArray(10) { CELL_UNKNOWN } }
-        moves.filter { !it.isOffense }.forEach { move ->
-            if (move.result == "MISS") {
-                board[move.x][move.y] = CELL_MISS
-            } else if (move.isSunk) {
-                board[move.x][move.y] = CELL_SUNK
-            } else if (move.result == "HIT" || isShipData(move.result)) {
-                board[move.x][move.y] = CELL_HIT
-            }
-        }
-        return board
-    }
-
-    fun getLiveHeatmap(moves: List<Move>, context: Context): Array<IntArray>? {
-        return getBestMove(moves, context).heatMap
-    }
-}
-
-// ==========================================
 // BOT 6: MYCROFT (MCMC JOINT-PROBABILITY ENGINE)
 // ==========================================
 
 private object MycroftBot {
 
-    fun getBestMove(moves: List<Move>, gameId: Int): BotDecision {
+    // Now actively accepts the Neural Network Prior to skew the MCMC targeting
+    fun getBestMove(moves: List<Move>, gameId: Int, moriartyPrior: Array<FloatArray>? = null, isMoriarty: Boolean = false): BotDecision {
         val random = kotlin.random.Random((gameId * 10000) + moves.size)
-        val parityOffset = gameId % 2
-        val safeMode = true // Forces checkerboard parity during open hunting phases
 
         val board = DeductionEngine.getBoardState(moves)
         val analysis = DeductionEngine.analyzeBoardState(board, moves)
@@ -1219,14 +931,22 @@ private object MycroftBot {
             val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), random)
             if (target != null) {
                 heatMap[target.first][target.second] = 100
-                return BotDecision(target, "Mycroft: Tracing active vector (Assassin Mode).", heatMap, diagnosticMap)
+                return BotDecision(
+                    target,
+                    "Mycroft (Assassin Mode):\nTracing active vector.", // <-- ADDED \n
+                    heatMap,
+                    diagnosticMap
+                )
             }
         }
 
         // --- PHASE 2: 128-BIT BITBOARD EXTRACTION & CHRONOLOGY ---
-        var missLow = 0L; var missHigh = 0L
-        var allHitsLow = 0L; var allHitsHigh = 0L
-        var sunkLow = 0L; var sunkHigh = 0L
+        var missLow = 0L;
+        var missHigh = 0L
+        var allHitsLow = 0L;
+        var allHitsHigh = 0L
+        var sunkLow = 0L;
+        var sunkHigh = 0L
         var numSunks = 0
         val pegTimes = IntArray(100) { -1 }
 
@@ -1242,11 +962,18 @@ private object MycroftBot {
                 val bit = 1L shl shift
 
                 when (board[x][y]) {
-                    DeductionEngine.CELL_MISS -> if (isHigh) missHigh = missHigh or bit else missLow = missLow or bit
-                    DeductionEngine.CELL_HIT -> if (isHigh) allHitsHigh = allHitsHigh or bit else allHitsLow = allHitsLow or bit
+                    DeductionEngine.CELL_MISS -> if (isHigh) missHigh =
+                        missHigh or bit else missLow = missLow or bit
+
+                    DeductionEngine.CELL_HIT -> if (isHigh) allHitsHigh =
+                        allHitsHigh or bit else allHitsLow = allHitsLow or bit
+
                     DeductionEngine.CELL_SUNK -> {
-                        if (isHigh) { allHitsHigh = allHitsHigh or bit; sunkHigh = sunkHigh or bit }
-                        else { allHitsLow = allHitsLow or bit; sunkLow = sunkLow or bit }
+                        if (isHigh) {
+                            allHitsHigh = allHitsHigh or bit; sunkHigh = sunkHigh or bit
+                        } else {
+                            allHitsLow = allHitsLow or bit; sunkLow = sunkLow or bit
+                        }
                         numSunks++
                     }
                 }
@@ -1266,33 +993,51 @@ private object MycroftBot {
                 for (y in 0..9) {
                     // Horizontal Placements
                     if (x + size <= 10) {
-                        var pLow = 0L; var pHigh = 0L; var valid = true
+                        var pLow = 0L;
+                        var pHigh = 0L;
+                        var valid = true
                         for (i in 0 until size) {
                             val idx = y * 10 + (x + i)
                             if (idx < 64) {
-                                if ((missLow and (1L shl idx)) != 0L) { valid = false; break }
+                                if ((missLow and (1L shl idx)) != 0L) {
+                                    valid = false; break
+                                }
                                 pLow = pLow or (1L shl idx)
                             } else {
-                                if ((missHigh and (1L shl (idx - 64))) != 0L) { valid = false; break }
+                                if ((missHigh and (1L shl (idx - 64))) != 0L) {
+                                    valid = false; break
+                                }
                                 pHigh = pHigh or (1L shl (idx - 64))
                             }
                         }
-                        if (valid) { placementsLow[shipIdx][count] = pLow; placementsHigh[shipIdx][count] = pHigh; count++ }
+                        if (valid) {
+                            placementsLow[shipIdx][count] = pLow; placementsHigh[shipIdx][count] =
+                                pHigh; count++
+                        }
                     }
                     // Vertical Placements
                     if (y + size <= 10) {
-                        var pLow = 0L; var pHigh = 0L; var valid = true
+                        var pLow = 0L;
+                        var pHigh = 0L;
+                        var valid = true
                         for (i in 0 until size) {
                             val idx = (y + i) * 10 + x
                             if (idx < 64) {
-                                if ((missLow and (1L shl idx)) != 0L) { valid = false; break }
+                                if ((missLow and (1L shl idx)) != 0L) {
+                                    valid = false; break
+                                }
                                 pLow = pLow or (1L shl idx)
                             } else {
-                                if ((missHigh and (1L shl (idx - 64))) != 0L) { valid = false; break }
+                                if ((missHigh and (1L shl (idx - 64))) != 0L) {
+                                    valid = false; break
+                                }
                                 pHigh = pHigh or (1L shl (idx - 64))
                             }
                         }
-                        if (valid) { placementsLow[shipIdx][count] = pLow; placementsHigh[shipIdx][count] = pHigh; count++ }
+                        if (valid) {
+                            placementsLow[shipIdx][count] = pLow; placementsHigh[shipIdx][count] =
+                                pHigh; count++
+                        }
                     }
                 }
             }
@@ -1310,10 +1055,12 @@ private object MycroftBot {
             val targetIdx = unplacedIndices.firstOrNull { fleetSizes[it] == size }
             if (targetIdx != null) {
                 unplacedIndices.remove(targetIdx)
-                var pLow = 0L; var pHigh = 0L
+                var pLow = 0L;
+                var pHigh = 0L
                 for ((px, py) in ship) {
                     val idx = py * 10 + px
-                    if (idx < 64) pLow = pLow or (1L shl idx) else pHigh = pHigh or (1L shl (idx - 64))
+                    if (idx < 64) pLow = pLow or (1L shl idx) else pHigh =
+                        pHigh or (1L shl (idx - 64))
                 }
                 stateLow[targetIdx] = pLow
                 stateHigh[targetIdx] = pHigh
@@ -1340,19 +1087,19 @@ private object MycroftBot {
             }
             if (!placed) {
                 val fallback = SherlockBot.getBestMove(moves, gameId)
-                return fallback.copy(log = "Mycroft: MCMC Seed Failed. Deferring to Sherlock CSP.")
+                return fallback.copy(log = "Mycroft: MCMC Seed Failed.\nDeferring to Sherlock CSP.") // <-- ADDED \n
             }
         }
 
         // --- PHASE 5: THE ZERO-ALLOCATION MARKOV CHAIN ---
         val rawHeatmap = IntArray(100) { 0 }
         var validUniverses = 0
-        val maxTimeMs = 300L // 300ms execution cap guarantees strict 60FPS UI rendering animations
+        val maxTimeMs = 3000L
         val startTime = System.currentTimeMillis()
         val burnInPeriod = 1000
 
         for (step in 0 until 100_000) {
-            if (System.currentTimeMillis() - startTime > maxTimeMs) break
+            if (step % 1000 == 0 && System.currentTimeMillis() - startTime > maxTimeMs) break
 
             val jumpTwo = random.nextFloat() < 0.2f
             val idx1 = random.nextInt(5)
@@ -1362,7 +1109,8 @@ private object MycroftBot {
                 while (idx2 == idx1) idx2 = random.nextInt(5)
             }
 
-            val oldLow1 = stateLow[idx1]; val oldHigh1 = stateHigh[idx1]
+            val oldLow1 = stateLow[idx1];
+            val oldHigh1 = stateHigh[idx1]
             val oldLow2 = if (jumpTwo) stateLow[idx2] else 0L
             val oldHigh2 = if (jumpTwo) stateHigh[idx2] else 0L
 
@@ -1370,7 +1118,8 @@ private object MycroftBot {
             val newLow1 = placementsLow[idx1][choice1]
             val newHigh1 = placementsHigh[idx1][choice1]
 
-            var newLow2 = 0L; var newHigh2 = 0L
+            var newLow2 = 0L;
+            var newHigh2 = 0L
             if (jumpTwo) {
                 val choice2 = random.nextInt(placementCounts[idx2])
                 newLow2 = placementsLow[idx2][choice2]
@@ -1378,50 +1127,65 @@ private object MycroftBot {
             }
 
             var validProposal = true
-            if (jumpTwo && ((newLow1 and newLow2) != 0L || (newHigh1 and newHigh2) != 0L)) validProposal = false
+            if (jumpTwo && ((newLow1 and newLow2) != 0L || (newHigh1 and newHigh2) != 0L)) validProposal =
+                false
 
             if (validProposal) {
-                var otherLow = 0L; var otherHigh = 0L
+                var otherLow = 0L;
+                var otherHigh = 0L
                 for (i in 0..4) {
                     if (i != idx1 && i != idx2) {
                         otherLow = otherLow or stateLow[i]; otherHigh = otherHigh or stateHigh[i]
                     }
                 }
-                if ((newLow1 and otherLow) != 0L || (newHigh1 and otherHigh) != 0L) validProposal = false
-                if (jumpTwo && ((newLow2 and otherLow) != 0L || (newHigh2 and otherHigh) != 0L)) validProposal = false
+                if ((newLow1 and otherLow) != 0L || (newHigh1 and otherHigh) != 0L) validProposal =
+                    false
+                if (jumpTwo && ((newLow2 and otherLow) != 0L || (newHigh2 and otherHigh) != 0L)) validProposal =
+                    false
             }
 
             if (validProposal) {
                 stateLow[idx1] = newLow1; stateHigh[idx1] = newHigh1
-                if (jumpTwo) { stateLow[idx2] = newLow2; stateHigh[idx2] = newHigh2 }
+                if (jumpTwo) {
+                    stateLow[idx2] = newLow2; stateHigh[idx2] = newHigh2
+                }
 
-                val touchesHits = (newLow1 and allHitsLow) != 0L || (newHigh1 and allHitsHigh) != 0L ||
-                        (oldLow1 and allHitsLow) != 0L || (oldHigh1 and allHitsHigh) != 0L ||
-                        (jumpTwo && ((newLow2 and allHitsLow) != 0L || (newHigh2 and allHitsHigh) != 0L ||
-                                (oldLow2 and allHitsLow) != 0L || (oldHigh2 and allHitsHigh) != 0L))
+                val touchesHits =
+                    (newLow1 and allHitsLow) != 0L || (newHigh1 and allHitsHigh) != 0L ||
+                            (oldLow1 and allHitsLow) != 0L || (oldHigh1 and allHitsHigh) != 0L ||
+                            (jumpTwo && ((newLow2 and allHitsLow) != 0L || (newHigh2 and allHitsHigh) != 0L ||
+                                    (oldLow2 and allHitsLow) != 0L || (oldHigh2 and allHitsHigh) != 0L))
 
                 if (touchesHits) {
-                    var occLow = 0L; var occHigh = 0L
-                    for (i in 0..4) { occLow = occLow or stateLow[i]; occHigh = occHigh or stateHigh[i] }
+                    var occLow = 0L;
+                    var occHigh = 0L
+                    for (i in 0..4) {
+                        occLow = occLow or stateLow[i]; occHigh = occHigh or stateHigh[i]
+                    }
 
                     if ((occLow and allHitsLow) != allHitsLow || (occHigh and allHitsHigh) != allHitsHigh) {
                         validProposal = false
                     } else {
                         var fullyHitCount = 0
-                        var fhSunkLow = 0L; var fhSunkHigh = 0L
+                        var fhSunkLow = 0L;
+                        var fhSunkHigh = 0L
                         for (i in 0..4) {
-                            val sl = stateLow[i]; val sh = stateHigh[i]
+                            val sl = stateLow[i];
+                            val sh = stateHigh[i]
                             if ((sl and allHitsLow) == sl && (sh and allHitsHigh) == sh) {
                                 fullyHitCount++
                                 var maxTime = -1
-                                var lethalL = 0L; var lethalH = 0L
+                                var lethalL = 0L;
+                                var lethalH = 0L
 
                                 var tempSl = sl
                                 while (tempSl != 0L) {
                                     val lsb = tempSl and -tempSl
                                     val b = java.lang.Long.numberOfTrailingZeros(lsb)
                                     val t = pegTimes[b]
-                                    if (t > maxTime) { maxTime = t; lethalL = lsb; lethalH = 0L }
+                                    if (t > maxTime) {
+                                        maxTime = t; lethalL = lsb; lethalH = 0L
+                                    }
                                     tempSl = tempSl xor lsb
                                 }
 
@@ -1430,7 +1194,9 @@ private object MycroftBot {
                                     val lsb = tempSh and -tempSh
                                     val b = java.lang.Long.numberOfTrailingZeros(lsb)
                                     val t = pegTimes[b + 64]
-                                    if (t > maxTime) { maxTime = t; lethalH = lsb; lethalL = 0L }
+                                    if (t > maxTime) {
+                                        maxTime = t; lethalH = lsb; lethalL = 0L
+                                    }
                                     tempSh = tempSh xor lsb
                                 }
 
@@ -1449,7 +1215,9 @@ private object MycroftBot {
 
             if (!validProposal) {
                 stateLow[idx1] = oldLow1; stateHigh[idx1] = oldHigh1
-                if (jumpTwo) { stateLow[idx2] = oldLow2; stateHigh[idx2] = oldHigh2 }
+                if (jumpTwo) {
+                    stateLow[idx2] = oldLow2; stateHigh[idx2] = oldHigh2
+                }
             }
 
             if (step >= burnInPeriod) {
@@ -1475,23 +1243,54 @@ private object MycroftBot {
         var maxHeat = -1
         var bestMoves = mutableListOf<Pair<Int, Int>>()
 
-        var occLow = 0L; var occHigh = 0L
-        for (i in 0..4) { occLow = occLow or stateLow[i]; occHigh = occHigh or stateHigh[i] }
-        val hasActiveHits = (allHitsLow and occLow) != allHitsLow || (allHitsHigh and occHigh) != allHitsHigh
+        val parityOffset = gameId % 2
 
         for (x in 0..9) {
             for (y in 0..9) {
                 if (board[x][y] == DeductionEngine.CELL_UNKNOWN) {
                     val idx = y * 10 + x
-                    var heat = rawHeatmap[idx]
+                    val baseHeat = rawHeatmap[idx].toFloat()
+                    val finalHeat: Int
 
-                    if (!hasActiveHits && safeMode && (x + y) % 2 != parityOffset) heat = 0
+                    val isValidParity = (x + y) % 2 == parityOffset
 
-                    heatMap[x][y] = heat
-                    if (heat > maxHeat) {
-                        maxHeat = heat
+                    if (moriartyPrior != null) {
+                        if (isValidParity && baseHeat > 0) {
+                            var localMaxBias = moriartyPrior[x][y]
+
+                            // Spatial Diffusion: Absorb peaks from off-parity neighbors
+                            val neighbors = listOf(Pair(x - 1, y), Pair(x + 1, y), Pair(x, y - 1), Pair(x, y + 1))
+                            for ((nx, ny) in neighbors) {
+                                if (nx in 0..9 && ny in 0..9) {
+                                    val neighborBias = moriartyPrior[nx][ny]
+                                    if (neighborBias > localMaxBias) {
+                                        localMaxBias = neighborBias
+                                    }
+                                }
+                            }
+                            
+                            // MCMC BINARY MASK: MCMC confirms a ship can fit here. 
+                            // We throw away its center-biased magnitude and let ML take 100% control.
+                            finalHeat = (localMaxBias * 10000).toInt()
+                        } else {
+                            // Impossible island or off-parity
+                            finalHeat = 0
+                        }
+                    } else {
+                        // Mycroft Maverick Mode: No psychology, pure math
+                        if (isMoriarty && !isValidParity) {
+                            finalHeat = 0
+                        } else {
+                            finalHeat = baseHeat.toInt()
+                        }
+                    }
+
+                    heatMap[x][y] = finalHeat
+
+                    if (finalHeat > maxHeat) {
+                        maxHeat = finalHeat
                         bestMoves = mutableListOf(Pair(x, y))
-                    } else if (heat == maxHeat && heat > 0) {
+                    } else if (finalHeat == maxHeat && finalHeat > 0) {
                         bestMoves.add(Pair(x, y))
                     }
                 }
@@ -1499,18 +1298,32 @@ private object MycroftBot {
         }
 
         val target = if (maxHeat > 0 && bestMoves.isNotEmpty()) {
-            bestMoves.random(random)
+            bestMoves.random(random) // Deterministic tie-breaking is strictly preserved
         } else {
             val openWater = mutableListOf<Pair<Int, Int>>()
-            for (x in 0..9) for (y in 0..9) if (board[x][y] == DeductionEngine.CELL_UNKNOWN) openWater.add(Pair(x, y))
+            for (x in 0..9) for (y in 0..9) if (board[x][y] == DeductionEngine.CELL_UNKNOWN) openWater.add(
+                Pair(x, y)
+            )
             if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
         }
 
-        return BotDecision(target, "Mycroft MCMC (Safe Mode): Sampled $validUniverses universes.", heatMap, diagnosticMap)
+        val logMessage = when {
+            isMoriarty && moriartyPrior != null -> "Moriarty Neural Offense:\nML Prior scaled $validUniverses MCMC universes."
+            isMoriarty && moriartyPrior == null -> "Moriarty (Maverick Fallback):\nLow ML confidence ratio or <5 history games.\nFallback to Mycroft MCMC ($validUniverses universes)."
+            moriartyPrior != null -> "Mycroft (Moriarty Guided):\nML Prior scaled $validUniverses MCMC universes."
+            else -> "Mycroft (Maverick Mode):\nSampled $validUniverses universes."
+        }
+
+        return BotDecision(
+            target,
+            logMessage,
+            heatMap,
+            diagnosticMap
+        )
     }
 
-    fun getLiveHeatmap(moves: List<Move>, gameId: Int): Array<IntArray>? {
-        return getBestMove(moves, gameId).heatMap
+    fun getLiveHeatmap(moves: List<Move>, gameId: Int, moriartyPrior: Array<FloatArray>? = null): Array<IntArray>? {
+        return getBestMove(moves, gameId, moriartyPrior).heatMap
     }
 
     fun getLiveDiagnostics(moves: List<Move>): Pair<List<List<Pair<Int, Int>>>, List<Pair<Int, Int>>> {
@@ -1526,5 +1339,295 @@ private object MycroftBot {
         for (deadSize in analysis.deadSizes) livingFleet.remove(if (deadSize > 5) 5 else deadSize)
         if (livingFleet.isEmpty()) livingFleet.add(2)
         return livingFleet.sortedDescending()
+    }
+}
+
+// ==========================================
+// BOT 7: MORIARTY (NEURAL NETWORK SEQUENCE PREDICTOR)
+// ==========================================
+
+/**
+ * AI LAYER: Moriarty (The Neural Network)
+ * * Non-Stationary Sequence Predictor.
+ * * Uses an LSTM/Transformer TFLite model to predict human placement meta-patterns.
+ * * Now cleanly exposed to the ViewModel for execution prior to tactical routing.
+ */
+object MoriartyBot {
+
+    private var cachedDefenseBuffer: java.nio.MappedByteBuffer? = null
+    private var cachedOffenseBuffer: java.nio.MappedByteBuffer? = null
+
+    private fun getModelBuffer(context: Context, isOffense: Boolean): java.nio.MappedByteBuffer {
+        val fileName = if (isOffense) "moriarty_offense.tflite" else "moriarty_defense.tflite"
+        if (isOffense) {
+            if (cachedOffenseBuffer == null) {
+                val fd = context.assets.openFd(fileName)
+                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                    cachedOffenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
+                }
+            }
+            return cachedOffenseBuffer!!
+        } else {
+            if (cachedDefenseBuffer == null) {
+                val fd = context.assets.openFd(fileName)
+                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                    cachedDefenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
+                }
+            }
+            return cachedDefenseBuffer!!
+        }
+    }
+
+    private fun getShipWeight(shipClass: String): Float {
+        return when (shipClass) {
+            "Carrier" -> 0.4f
+            "Battleship" -> 0.6f
+            "Cruiser", "Submarine" -> 0.8f
+            "Destroyer" -> 1.0f
+            else -> 0.7f
+        }
+    }
+
+    private fun buildMultiChannelTensor(
+        targetPlayer: String,
+        allGames: List<Game>,
+        allMoves: List<Move>,
+        liveMoves: List<Move>?,
+        limitTimestamp: Long?
+    ): FloatArray? {
+        val validGames = allGames.filter {
+            (it.playerName.equals(targetPlayer, ignoreCase = true) || it.opponentName.equals(targetPlayer, ignoreCase = true)) &&
+                    it.result != null &&
+                    (limitTimestamp == null || it.timestamp < limitTimestamp)
+        }.sortedBy { it.timestamp }
+
+        if (validGames.size < 5) return null
+        val historySlice = validGames.takeLast(5)
+        val movesByGameId = allMoves.groupBy { it.gameId }
+
+        val stepsCount = if (liveMoves != null) 6 else 5
+        val flatTensor = FloatArray(stepsCount * 7 * 10 * 10)
+        var tensorIdx = 0
+
+        var cumulativeTraumaMisses = Array(10) { FloatArray(10) { 0.0f } }
+        var cumulativeTraumaHits = Array(10) { FloatArray(10) { 0.0f } }
+
+        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, traumaHitsMatrix: Array<FloatArray>, isLiveStep: Boolean) {
+            val playerIsP1 = if (isLiveStep) true else (gameMoves.firstOrNull()?.let { m ->
+                val g = validGames.find { it.id == m.gameId }
+                g?.playerName.equals(targetPlayer, ignoreCase = true)
+            } ?: true)
+
+            // THE FIX: Use the isOffense boolean mapped against the player's seat!
+            val humanShots = gameMoves.filter { m ->
+                (m.isOffense == playerIsP1) && !isShipData(m.result)
+            }.sortedBy { it.shotNumber }
+
+            val humanShips = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && isShipData(m.result)
+            }
+
+            val chHumanMisses = Array(10) { FloatArray(10) { 0.0f } }
+            val chHumanHits = Array(10) { FloatArray(10) { 0.0f } }
+            val chClustering = Array(10) { FloatArray(10) { 0.0f } }
+            val chChronology = Array(10) { FloatArray(10) { 0.0f } }
+            val chSpatial = Array(10) { FloatArray(10) { 0.0f } }
+
+            val totalShots = humanShots.size
+            val hitQueue = mutableListOf<Pair<Int, Int>>()
+
+            humanShots.forEachIndexed { index, move ->
+                if (move.x in 0..9 && move.y in 0..9) {
+                    if (totalShots > 1) {
+                        chChronology[move.x][move.y] = index.toFloat() / (totalShots - 1).toFloat()
+                    }
+                    val isHit = move.result == "HIT" || move.isSunk
+                    if (isHit) {
+                        chHumanHits[move.x][move.y] = 1.0f
+                        chClustering[move.x][move.y] = 1.0f
+                        hitQueue.add(Pair(move.x, move.y))
+                    } else {
+                        chHumanMisses[move.x][move.y] = 1.0f
+                        for ((hx, hy) in hitQueue) {
+                            if (Math.abs(hx - move.x) <= 1 && Math.abs(hy - move.y) <= 1) {
+                                chClustering[move.x][move.y] = 0.5f
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!isLiveStep) {
+                humanShips.forEach { move ->
+                    if (move.x in 0..9 && move.y in 0..9) {
+                        chSpatial[move.x][move.y] = getShipWeight(move.result)
+                    }
+                }
+            }
+
+            for (ch in 0..6) {
+                for (y in 0..9) {
+                    for (x in 0..9) {
+                        flatTensor[tensorIdx++] = when (ch) {
+                            0 -> traumaMatrix[x][y]
+                            1 -> traumaHitsMatrix[x][y]
+                            2 -> chHumanMisses[x][y]
+                            3 -> chHumanHits[x][y]
+                            4 -> chClustering[x][y]
+                            5 -> chChronology[x][y]
+                            else -> chSpatial[x][y]
+                        }
+                    }
+                }
+            }
+        }
+
+        for (game in historySlice) {
+            val gameMoves = movesByGameId[game.id] ?: emptyList()
+            bakeChannels(gameMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = false)
+
+            val playerIsP1 = game.playerName.equals(targetPlayer, ignoreCase = true)
+            val botShots = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && !isShipData(m.result)
+            }
+            val humanShips = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && isShipData(m.result)
+            }
+
+            val currentBotMisses = Array(10) { FloatArray(10) { 0.0f } }
+            val currentBotHits = Array(10) { FloatArray(10) { 0.0f } }
+            
+            botShots.forEach { move ->
+                if (move.x in 0..9 && move.y in 0..9) {
+                    val isHit = move.result == "HIT" || move.isSunk
+                    if (isHit) {
+                        val shipHit = humanShips.find { it.x == move.x && it.y == move.y }
+                        val weight = if (shipHit != null) getShipWeight(shipHit.result) else 0.7f
+                        currentBotHits[move.x][move.y] += weight
+                    } else {
+                        currentBotMisses[move.x][move.y] += 1.0f
+                    }
+                }
+            }
+
+            for (x in 0..9) {
+                for (y in 0..9) {
+                    cumulativeTraumaMisses[x][y] = (cumulativeTraumaMisses[x][y] * 0.85f) + currentBotMisses[x][y]
+                    cumulativeTraumaHits[x][y] = (cumulativeTraumaHits[x][y] * 0.85f) + currentBotHits[x][y]
+                }
+            }
+        }
+
+        if (liveMoves != null) {
+            bakeChannels(liveMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = true)
+        }
+
+        return flatTensor
+    }
+
+    fun getPsychologicalPrior(
+        context: Context,
+        playerName: String,
+        allGames: List<Game>,
+        allMoves: List<Move>,
+        liveMoves: List<Move>? = null,
+        limitTimestamp: Long? = null
+    ): Array<FloatArray>? {
+        val isOffense = (liveMoves != null)
+        val flatData = buildMultiChannelTensor(playerName, allGames, allMoves, liveMoves, limitTimestamp) ?: return null
+
+        val steps = if (isOffense) 6 else 5
+        val totalBytes = steps * 7 * 10 * 10 * 4
+
+        val inputBuffer = java.nio.ByteBuffer.allocateDirect(totalBytes).apply {
+            order(java.nio.ByteOrder.nativeOrder())
+        }
+        flatData.forEach { inputBuffer.putFloat(it) }
+        inputBuffer.rewind()
+
+        val outputBuffer = Array(1) { FloatArray(100) }
+        val interpreter = org.tensorflow.lite.Interpreter(getModelBuffer(context, isOffense))
+        interpreter.run(inputBuffer, outputBuffer)
+        interpreter.close()
+
+        val logits = outputBuffer[0]
+        val probabilities = FloatArray(100) { i -> (1.0 / (1.0 + Math.exp(-logits[i].toDouble()))).toFloat() }
+        val averageProb = probabilities.average().toFloat()
+        val maxProb = probabilities.maxOrNull() ?: 1.0f
+
+        val confidenceRatio = if (averageProb > 0f) maxProb / averageProb else 1.0f
+        if (confidenceRatio < 1.3f) {
+            return null // Fallback to Mycroft
+        }
+
+        val priorMap = Array(10) { FloatArray(10) { 1.0f } }
+        for (y in 0 until 10) {
+            for (x in 0 until 10) {
+                val flatIndex = y * 10 + x
+                priorMap[x][y] = if (averageProb > 0f) probabilities[flatIndex] / averageProb else 1.0f
+            }
+        }
+        return priorMap
+    }
+
+    fun generatePhantomFleet(defensivePrior: Array<FloatArray>?): List<Ship> {
+        val safePrior = defensivePrior ?: Array(10) { FloatArray(10) { 1.0f } }
+        val shipSpecs = listOf(Pair(5, "Carrier"), Pair(4, "Battleship"), Pair(3, "Cruiser"), Pair(3, "Submarine"), Pair(2, "Destroyer"))
+        val fleet = mutableListOf<Ship>()
+        val grid = Array(10) { BooleanArray(10) { false } }
+
+        for ((size, name) in shipSpecs) {
+            val validPlacements = mutableListOf<Triple<Int, Int, Boolean>>()
+            val heatScores = mutableListOf<Float>()
+
+            for (isVertical in listOf(true, false)) {
+                val maxX = if (isVertical) 10 else 10 - size + 1
+                val maxY = if (isVertical) 10 - size + 1 else 10
+
+                for (x in 0 until maxX) {
+                    for (y in 0 until maxY) {
+                        var collision = false
+                        var currentHeat = 0.0f
+
+                        for (i in 0 until size) {
+                            val cx = x + if (!isVertical) i else 0
+                            val cy = y + if (isVertical) i else 0
+                            if (grid[cx][cy]) { collision = true; break }
+                            currentHeat += safePrior[cx][cy]
+                        }
+
+                        if (!collision) {
+                            validPlacements.add(Triple(x, y, isVertical))
+                            heatScores.add(currentHeat)
+                        }
+                    }
+                }
+            }
+
+            if (validPlacements.isNotEmpty()) {
+                val weights = heatScores.map { Math.exp(-it.toDouble()) }
+                val totalWeight = weights.sum()
+                var randomVal = Math.random() * totalWeight
+                var chosenIndex = validPlacements.indices.last
+                for (i in weights.indices) {
+                    randomVal -= weights[i]
+                    if (randomVal <= 0) {
+                        chosenIndex = i
+                        break
+                    }
+                }
+                
+                val (px, py, bestIsVertical) = validPlacements[chosenIndex]
+
+                for (i in 0 until size) {
+                    val cx = px + if (!bestIsVertical) i else 0
+                    val cy = py + if (bestIsVertical) i else 0
+                    grid[cx][cy] = true
+                }
+                fleet.add(Ship(name = name, size = size, x = px.toFloat(), y = py.toFloat(), isVertical = bestIsVertical, isPlaced = true))
+            }
+        }
+        return fleet
     }
 }
