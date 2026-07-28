@@ -368,7 +368,8 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
             }
 
             if (gameMode == "Bot") {
-                botSecretFleet = TacticalEngine.generateBotFleet(opponentName, adlerDefensiveMatrix)
+                val defensivePrior = if (opponentName.contains("Moriarty", ignoreCase = true)) moriartyPriorMatrix else adlerDefensiveMatrix
+                botSecretFleet = TacticalEngine.generateBotFleet(opponentName, defensivePrior)
                 saveBotFleetToDatabaseInternal()
             }
             observeCurrentGameMoves(currentGameId!!)

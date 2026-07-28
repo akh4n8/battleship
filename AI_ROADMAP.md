@@ -39,9 +39,12 @@ The bleeding-edge bots designed to solve advanced game theory concepts and non-s
 * **`The Sovereign Engine` (Future - Python Testing Phase)**
   * *The Math:* Hybrid Ensemble Engine (Complexity-Gated).
   * *The Lore:* The absolute apex of Battleship logic. Fuses Sherlock's instant geometric speed in the early game with Mycroft's joint-probability MCMC squeeze in the late game to achieve true mathematical optimality.
-* **`MoriartyBot` (Future)** *(The Neural Network)*
-  * *The Math:* Non-Stationary Sequence Predictor (LSTM / Transformer).
+* **`MoriartyBot` (Working - V2)** *(The Neural Network)*
+  * *The Math:* Non-Stationary Sequence Predictor (Transformer / TFLite).
   * *The Lore:* The Napoleon of Crime. Where Adler assumes the player's strategy is a fixed trait, Moriarty learns *meta-patterns* and behavioral reactions, predicting exactly when the human will actively change their strategy.
+  * *Methodology:* Analyzes the player's last 5 games using a 7-channel tensor (Trauma Hits/Misses, Human Hits/Misses, Clustering, Chronology, Spatial). Uses an inverted psychological weighting scale.
+  * *Offense:* Feeds the 7 channels into a PyTorch-trained TFLite model. Triggers a Confidence Threshold: if the neural network is unsure (<1.3 ratio), Moriarty drops back into Mycroft's MCMC "Maverick Mode" (enforcing parity for optimal checkerboarding).
+  * *Defense:* Generates a 100-cell density map from the defense TFLite model and uses a Softmax sample to organically drop ships onto the grid, evading player hunting vectors.
 * **`HudsonBot` (Future)** *(The "Lucky Genius")*
   * *The Math:* Inverse Reinforcement Learning (IRL) / Dynamic Difficulty Adjustment.
   * *The Lore:* Sherlock's landlady gently manages the chaos. She intentionally maximizes her own mathematical regret at the exact right moments to ensure the player wins in a way that feels intensely satisfying and hard-fought.

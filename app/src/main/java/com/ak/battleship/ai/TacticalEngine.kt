@@ -40,7 +40,7 @@ object TacticalEngine {
 
                 // THE FIX: Explicitly route Moriarty to Mycroft's MCMC engine!
                 opponentName.contains("Mycroft", ignoreCase = true) || opponentName.contains("Moriarty", ignoreCase = true) ->
-                    MycroftBot.getBestMove(botMovesSoFar, gameId, moriartyPrior)
+                    MycroftBot.getBestMove(botMovesSoFar, gameId, moriartyPrior, isMoriarty = opponentName.contains("Moriarty", ignoreCase = true))
 
                 else -> {
                     val densityBot = WatsonBot
@@ -914,7 +914,7 @@ private object WatsonBot {
 private object MycroftBot {
 
     // Now actively accepts the Neural Network Prior to skew the MCMC targeting
-    fun getBestMove(moves: List<Move>, gameId: Int, moriartyPrior: Array<FloatArray>? = null): BotDecision {
+    fun getBestMove(moves: List<Move>, gameId: Int, moriartyPrior: Array<FloatArray>? = null, isMoriarty: Boolean = false): BotDecision {
         val random = kotlin.random.Random((gameId * 10000) + moves.size)
 
         val board = DeductionEngine.getBoardState(moves)
@@ -1252,33 +1252,37 @@ private object MycroftBot {
                     val baseHeat = rawHeatmap[idx].toFloat()
                     val finalHeat: Int
 
+                    val isValidParity = (x + y) % 2 == parityOffset
+
                     if (moriartyPrior != null) {
-                        // MORIARTY MODE: Spatial Diffusion + Strict Parity
-                        val isValidParity = (x + y) % 2 == parityOffset
+                        if (isValidParity && baseHeat > 0) {
+                            var localMaxBias = moriartyPrior[x][y]
 
-                        if (isValidParity) {
-                            // 1. Get the base psychological multiplier
-                            var localMaxBias = moriartyPrior[x][y].coerceIn(0.15f, 4.0f)
-
-                            // 2. SPATIAL DIFFUSION: Absorb intuition from off-parity neighbors
+                            // Spatial Diffusion: Absorb peaks from off-parity neighbors
                             val neighbors = listOf(Pair(x - 1, y), Pair(x + 1, y), Pair(x, y - 1), Pair(x, y + 1))
                             for ((nx, ny) in neighbors) {
                                 if (nx in 0..9 && ny in 0..9) {
-                                    val neighborBias = moriartyPrior[nx][ny].coerceIn(0.15f, 4.0f)
+                                    val neighborBias = moriartyPrior[nx][ny]
                                     if (neighborBias > localMaxBias) {
                                         localMaxBias = neighborBias
                                     }
                                 }
                             }
-                            // 3. Fuse perfect physics with the pooled psychology
-                            finalHeat = (baseHeat * localMaxBias).toInt()
+                            
+                            // MCMC BINARY MASK: MCMC confirms a ship can fit here. 
+                            // We throw away its center-biased magnitude and let ML take 100% control.
+                            finalHeat = (localMaxBias * 10000).toInt()
                         } else {
-                            // 4. Force checkerboard by muting off-parity cells
+                            // Impossible island or off-parity
                             finalHeat = 0
                         }
                     } else {
-                        // MYCROFT MAVERICK MODE: Pure MCMC Physics (No Parity Constraint)
-                        finalHeat = baseHeat.toInt()
+                        // Mycroft Maverick Mode: No psychology, pure math
+                        if (isMoriarty && !isValidParity) {
+                            finalHeat = 0
+                        } else {
+                            finalHeat = baseHeat.toInt()
+                        }
                     }
 
                     heatMap[x][y] = finalHeat
@@ -1303,10 +1307,11 @@ private object MycroftBot {
             if (openWater.isNotEmpty()) openWater.random(random) else Pair(0, 0)
         }
 
-        val logMessage = if (moriartyPrior != null) {
-            "Mycroft (Moriarty Guided):\nML Prior scaled $validUniverses MCMC universes." // <-- ADDED \n
-        } else {
-            "Mycroft (Maverick Mode):\nSampled $validUniverses universes." // <-- ADDED \n
+        val logMessage = when {
+            isMoriarty && moriartyPrior != null -> "Moriarty Neural Offense:\nML Prior scaled $validUniverses MCMC universes."
+            isMoriarty && moriartyPrior == null -> "Moriarty (Maverick Fallback):\nLow ML confidence ratio or <5 history games.\nFallback to Mycroft MCMC ($validUniverses universes)."
+            moriartyPrior != null -> "Mycroft (Moriarty Guided):\nML Prior scaled $validUniverses MCMC universes."
+            else -> "Mycroft (Maverick Mode):\nSampled $validUniverses universes."
         }
 
         return BotDecision(
@@ -1373,13 +1378,13 @@ object MoriartyBot {
         }
     }
 
-    private fun getShipWeight(result: String): Float {
-        return when (result) {
-            "Carrier" -> 1.0f
-            "Battleship" -> 0.8f
-            "Cruiser", "Submarine" -> 0.6f
-            "Destroyer" -> 0.4f
-            else -> 0.5f
+    private fun getShipWeight(shipClass: String): Float {
+        return when (shipClass) {
+            "Carrier" -> 0.4f
+            "Battleship" -> 0.6f
+            "Cruiser", "Submarine" -> 0.8f
+            "Destroyer" -> 1.0f
+            else -> 0.7f
         }
     }
 
@@ -1401,12 +1406,13 @@ object MoriartyBot {
         val movesByGameId = allMoves.groupBy { it.gameId }
 
         val stepsCount = if (liveMoves != null) 6 else 5
-        val flatTensor = FloatArray(stepsCount * 5 * 10 * 10)
+        val flatTensor = FloatArray(stepsCount * 7 * 10 * 10)
         var tensorIdx = 0
 
-        var cumulativeTrauma = Array(10) { FloatArray(10) { 0.0f } }
+        var cumulativeTraumaMisses = Array(10) { FloatArray(10) { 0.0f } }
+        var cumulativeTraumaHits = Array(10) { FloatArray(10) { 0.0f } }
 
-        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, isLiveStep: Boolean) {
+        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, traumaHitsMatrix: Array<FloatArray>, isLiveStep: Boolean) {
             val playerIsP1 = if (isLiveStep) true else (gameMoves.firstOrNull()?.let { m ->
                 val g = validGames.find { it.id == m.gameId }
                 g?.playerName.equals(targetPlayer, ignoreCase = true)
@@ -1421,7 +1427,8 @@ object MoriartyBot {
                 (m.isOffense != playerIsP1) && isShipData(m.result)
             }
 
-            val chProjection = Array(10) { FloatArray(10) { 0.0f } }
+            val chHumanMisses = Array(10) { FloatArray(10) { 0.0f } }
+            val chHumanHits = Array(10) { FloatArray(10) { 0.0f } }
             val chClustering = Array(10) { FloatArray(10) { 0.0f } }
             val chChronology = Array(10) { FloatArray(10) { 0.0f } }
             val chSpatial = Array(10) { FloatArray(10) { 0.0f } }
@@ -1431,15 +1438,16 @@ object MoriartyBot {
 
             humanShots.forEachIndexed { index, move ->
                 if (move.x in 0..9 && move.y in 0..9) {
-                    chProjection[move.x][move.y] = 1.0f
                     if (totalShots > 1) {
                         chChronology[move.x][move.y] = index.toFloat() / (totalShots - 1).toFloat()
                     }
                     val isHit = move.result == "HIT" || move.isSunk
                     if (isHit) {
+                        chHumanHits[move.x][move.y] = 1.0f
                         chClustering[move.x][move.y] = 1.0f
                         hitQueue.add(Pair(move.x, move.y))
                     } else {
+                        chHumanMisses[move.x][move.y] = 1.0f
                         for ((hx, hy) in hitQueue) {
                             if (Math.abs(hx - move.x) <= 1 && Math.abs(hy - move.y) <= 1) {
                                 chClustering[move.x][move.y] = 0.5f
@@ -1458,14 +1466,16 @@ object MoriartyBot {
                 }
             }
 
-            for (ch in 0..4) {
+            for (ch in 0..6) {
                 for (y in 0..9) {
                     for (x in 0..9) {
                         flatTensor[tensorIdx++] = when (ch) {
                             0 -> traumaMatrix[x][y]
-                            1 -> chProjection[x][y]
-                            2 -> chClustering[x][y]
-                            3 -> chChronology[x][y]
+                            1 -> traumaHitsMatrix[x][y]
+                            2 -> chHumanMisses[x][y]
+                            3 -> chHumanHits[x][y]
+                            4 -> chClustering[x][y]
+                            5 -> chChronology[x][y]
                             else -> chSpatial[x][y]
                         }
                     }
@@ -1475,25 +1485,42 @@ object MoriartyBot {
 
         for (game in historySlice) {
             val gameMoves = movesByGameId[game.id] ?: emptyList()
-            bakeChannels(gameMoves, cumulativeTrauma, isLiveStep = false)
+            bakeChannels(gameMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = false)
 
             val playerIsP1 = game.playerName.equals(targetPlayer, ignoreCase = true)
             val botShots = gameMoves.filter { m ->
                 (m.isOffense != playerIsP1) && !isShipData(m.result)
             }
+            val humanShips = gameMoves.filter { m ->
+                (m.isOffense != playerIsP1) && isShipData(m.result)
+            }
 
-            val currentBotShots = Array(10) { FloatArray(10) { 0.0f } }
-            botShots.forEach { if (it.x in 0..9 && it.y in 0..9) currentBotShots[it.x][it.y] += 1.0f }
+            val currentBotMisses = Array(10) { FloatArray(10) { 0.0f } }
+            val currentBotHits = Array(10) { FloatArray(10) { 0.0f } }
+            
+            botShots.forEach { move ->
+                if (move.x in 0..9 && move.y in 0..9) {
+                    val isHit = move.result == "HIT" || move.isSunk
+                    if (isHit) {
+                        val shipHit = humanShips.find { it.x == move.x && it.y == move.y }
+                        val weight = if (shipHit != null) getShipWeight(shipHit.result) else 0.7f
+                        currentBotHits[move.x][move.y] += weight
+                    } else {
+                        currentBotMisses[move.x][move.y] += 1.0f
+                    }
+                }
+            }
 
             for (x in 0..9) {
                 for (y in 0..9) {
-                    cumulativeTrauma[x][y] = (cumulativeTrauma[x][y] * 0.85f) + currentBotShots[x][y]
+                    cumulativeTraumaMisses[x][y] = (cumulativeTraumaMisses[x][y] * 0.85f) + currentBotMisses[x][y]
+                    cumulativeTraumaHits[x][y] = (cumulativeTraumaHits[x][y] * 0.85f) + currentBotHits[x][y]
                 }
             }
         }
 
         if (liveMoves != null) {
-            bakeChannels(liveMoves, cumulativeTrauma, isLiveStep = true)
+            bakeChannels(liveMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = true)
         }
 
         return flatTensor
@@ -1511,7 +1538,7 @@ object MoriartyBot {
         val flatData = buildMultiChannelTensor(playerName, allGames, allMoves, liveMoves, limitTimestamp) ?: return null
 
         val steps = if (isOffense) 6 else 5
-        val totalBytes = steps * 5 * 10 * 10 * 4
+        val totalBytes = steps * 7 * 10 * 10 * 4
 
         val inputBuffer = java.nio.ByteBuffer.allocateDirect(totalBytes).apply {
             order(java.nio.ByteOrder.nativeOrder())
@@ -1527,6 +1554,12 @@ object MoriartyBot {
         val logits = outputBuffer[0]
         val probabilities = FloatArray(100) { i -> (1.0 / (1.0 + Math.exp(-logits[i].toDouble()))).toFloat() }
         val averageProb = probabilities.average().toFloat()
+        val maxProb = probabilities.maxOrNull() ?: 1.0f
+
+        val confidenceRatio = if (averageProb > 0f) maxProb / averageProb else 1.0f
+        if (confidenceRatio < 1.3f) {
+            return null // Fallback to Mycroft
+        }
 
         val priorMap = Array(10) { FloatArray(10) { 1.0f } }
         for (y in 0 until 10) {
@@ -1573,13 +1606,18 @@ object MoriartyBot {
             }
 
             if (validPlacements.isNotEmpty()) {
-                val indexedPlacements = validPlacements.indices.map { i -> Pair(i, heatScores[i]) }
-                    .sortedBy { it.second }
-
-                val poolSize = maxOf(1, (indexedPlacements.size * 0.15f).toInt())
-                val candidatePool = indexedPlacements.take(poolSize)
-
-                val chosenIndex = candidatePool.random().first
+                val weights = heatScores.map { Math.exp(-it.toDouble()) }
+                val totalWeight = weights.sum()
+                var randomVal = Math.random() * totalWeight
+                var chosenIndex = validPlacements.indices.last
+                for (i in weights.indices) {
+                    randomVal -= weights[i]
+                    if (randomVal <= 0) {
+                        chosenIndex = i
+                        break
+                    }
+                }
+                
                 val (px, py, bestIsVertical) = validPlacements[chosenIndex]
 
                 for (i in 0 until size) {
