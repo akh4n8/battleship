@@ -66,12 +66,6 @@ fun DynamicWinProbabilityWidget(
                 WidgetTheme.WALL_STREET -> WallStreetWidget(probability, stats)
                 WidgetTheme.POKER -> HighStakesPokerWidget(probability, shotOutcome, commandKey, isPlayerFiring)
                 WidgetTheme.ILLUSIONIST -> IllusionistWidget(probability, shotOutcome, commandKey, isPlayerFiring)
-                WidgetTheme.WEATHER -> WeatherBroadcastWidget(probability)
-                WidgetTheme.RPG_GUILD -> RpgGuildMasterWidget(probability)
-                WidgetTheme.ELDRICTH_SEANCE -> EldritchSeanceWidget(probability)
-                WidgetTheme.LET_HIM_COOK -> LetHimCookWidget(probability)
-                WidgetTheme.BOMB_DEFUSAL -> BombDefusalWidget(probability)
-                WidgetTheme.RETRO_PET -> RetroPetWidget(probability)
 
                 else -> Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("Theme [${theme.title}] Under Construction...", color = Color.Gray, fontFamily = FontFamily.Monospace)

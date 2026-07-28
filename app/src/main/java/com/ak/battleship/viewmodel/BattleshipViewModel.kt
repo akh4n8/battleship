@@ -38,13 +38,7 @@ enum class WidgetTheme(val title: String) {
     ICE_FISHING("Aqua-Vu Camera"),
     WALL_STREET("Market Terminal"),
     POKER("High Stakes"),
-    ILLUSIONIST("The Magician"),
-    RETRO_PET("Meter Pet"),
-    WEATHER("Local Forecast"),
-    RPG_GUILD("Guild Master"),
-    ELDRICTH_SEANCE("The Abyss"),
-    LET_HIM_COOK("Kitchen Cam"),
-    BOMB_DEFUSAL("EOD Unit")
+    ILLUSIONIST("The Magician")
 }
 
 private data class HumanMatchContext(
