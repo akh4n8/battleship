@@ -21,12 +21,12 @@ import com.ak.battleship.data.Game
 @Composable
 fun getPlayerColor(name: String): Color {
     return when (name) {
-        "WatsonBot" -> Color(0xFF637E7C)   // Deep Blue-Grey (Professional, standard police procedure)
-        "SherlockBot" -> Color(0xFF0469B2) // Rich Indigo (Masterful, aligns well with your app's primary purple)
-        "MycroftBot" -> Color(0xFFA8760F)  // Dark Teal (Cold, calculating supercomputer)
-        "AdlerBot" -> Color(0xFF715673)    // Deep Berry Pink (Elegant, psychological prestige)
-        "MoriartyBot" -> Color(0xFFB20808) // Dark Crimson (Dangerous, final boss)
-        "HudsonBot" -> Color(0xFF21A808)   // Burnt Orange (Warm, inviting, lucky)
+        "WatsonBot" -> Color(0xFF637E7C.toInt())   // Deep Blue-Grey (Professional, standard police procedure)
+        "SherlockBot" -> Color(0xFF0469B2.toInt()) // Rich Indigo (Masterful, aligns well with your app's primary purple)
+        "MycroftBot" -> Color(0xFFA8760F.toInt())  // Dark Teal (Cold, calculating supercomputer)
+        "AdlerBot" -> Color(0xFF715673.toInt())    // Deep Berry Pink (Elegant, psychological prestige)
+        "MoriartyBot" -> Color(0xFFC70B0B.toInt()) // Dark Crimson (Dangerous, final boss)
+        "HudsonBot" -> Color(0xFF21A808.toInt())   // Burnt Orange (Warm, inviting, lucky)
 
         else -> MaterialTheme.colorScheme.primary // Fallback to your app's native primary color
     }
