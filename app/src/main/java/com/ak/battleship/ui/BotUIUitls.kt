@@ -33,7 +33,7 @@ fun getPlayerColor(name: String): Color {
         "SherlockBot" -> Color(0xFF0469B2.toInt())
         "MycroftBot" -> Color(0xFFA8760F.toInt())
         "AdlerBot" -> Color(0xFF715673.toInt())
-        "MoriartyBot" -> Color(0xFFC70B0B.toInt())
+        "MoriartyBot" -> Color(0xFF8B0000.toInt())
         "HudsonBot" -> Color(0xFF2E7D32.toInt())
         else -> MaterialTheme.colorScheme.primary // Default for human names
     }
