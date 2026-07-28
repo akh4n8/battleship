@@ -215,12 +215,15 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     private val _liveHudStats = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val liveHudStats: StateFlow<List<Pair<String, String>>> = _liveHudStats.asStateFlow()
 
-    val liveWinProbability: StateFlow<Float> = displayMoves.map { moves ->
+    val liveWinProbability: StateFlow<Float> = combine(
+        displayMoves,
+        dao.getAllGames()
+    ) { moves, historicalGames ->
         val oppName = currentGame?.opponentName ?: "Unknown"
         val playerName = currentGame?.playerName ?: "Player 1" // NEW: Grab the player name
 
-        // Pass BOTH names into the engine
-        val (prob, stats) = InferenceEngine.calculateLiveWinState(moves, playerName, oppName)
+        // Pass BOTH names into the engine, along with full historical DB context
+        val (prob, stats) = InferenceEngine.calculateLiveWinState(moves, playerName, oppName, historicalGames)
 
         _liveHudStats.value = stats
         prob

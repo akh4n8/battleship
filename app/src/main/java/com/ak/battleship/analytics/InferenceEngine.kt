@@ -1,26 +1,14 @@
 package com.ak.battleship.analytics
 
 import com.ak.battleship.data.Move
+import com.ak.battleship.data.Game
 
 /**
- * ANALYTICS LAYER: Machine Learning Inference Engine
- * * Utilizes pairwise Base Win Rates extracted from R Studio.
- * * Automatically inverts log-odds based on who is actively playing.
+ * ANALYTICS LAYER: Dynamic Machine Learning Inference Engine
+ * * Calculates pairwise Base Win Rates dynamically from Room SQLite.
+ * * Uses Bayesian Add-5 Smoothing to prevent overfitting on new matchups.
  */
 object InferenceEngine {
-
-    // Format: Pair(PlayerWithAdvantage, Opponent) to Z-Score
-    private val pairwiseBiases = mapOf(
-        Pair("luki", "deepbluebot") to 12.21f,
-        Pair("luki", "grandma") to 1.08f,
-        Pair("richard", "luki") to -1.73f,
-        Pair("luki", "nemesisbot") to 12.17f,
-        Pair("luki", "watsonbot") to 12.77f,
-        Pair("luki", "richard") to 12.15f
-
-        // Example of adding a new R calculation later:
-        // Pair("luki", "grandma") to 2.45f
-    )
 
     // --- STRICT GAME THEORY CONSTANTS ---
     private const val WEIGHT_SUNK_DIFF = 1.2f
@@ -29,30 +17,42 @@ object InferenceEngine {
     private const val WEIGHT_PLAYER_FIRST_BLOOD = 0.5f
 
     /**
-     * Smart Router: Normalizes names to lowercase to prevent Case-Sensitivity mismatches.
-     * Checks the map for the specific matchup.
+     * Dynamically calculates Log-Odds (Z-Score) based on historical match data.
      */
-    private fun getPairwiseBias(player: String, opponent: String): Float {
-        // Normalize everything to lowercase for the lookup
+    private fun getPairwiseBias(player: String, opponent: String, allGames: List<Game>): Float {
         val p = player.lowercase()
         val o = opponent.lowercase()
 
-        // 1. Standard Match: Check if the normalized pair exists
-        val directMatch = pairwiseBiases[Pair(p, o)]
-        if (directMatch != null) return directMatch
+        val matchHistory = allGames.filter { game ->
+            game.result != null &&
+            ((game.playerName.equals(p, ignoreCase = true) && game.opponentName.equals(o, ignoreCase = true)) ||
+             (game.playerName.equals(o, ignoreCase = true) && game.opponentName.equals(p, ignoreCase = true)))
+        }
 
-        // 2. Inverted Match: Check if the reverse normalized pair exists
-        val invertedMatch = pairwiseBiases[Pair(o, p)]
-        if (invertedMatch != null) return -invertedMatch
+        var playerWins = 0
+        var playerLosses = 0
 
-        // 3. Unknown Match
-        return 0.0f
+        for (game in matchHistory) {
+            val isP1 = game.playerName.equals(p, ignoreCase = true)
+            if (isP1) {
+                if (game.result == "WIN") playerWins++ else if (game.result == "LOSS") playerLosses++
+            } else {
+                if (game.result == "LOSS") playerWins++ else if (game.result == "WIN") playerLosses++
+            }
+        }
+
+        // Bayesian Add-5 Smoothing
+        val pWin = (playerWins + 5).toFloat() / (playerWins + playerLosses + 10).toFloat()
+        
+        // Log-odds
+        return kotlin.math.ln((pWin / (1.0f - pWin)).toDouble()).toFloat()
     }
 
     fun calculateLiveWinState(
         gameMoves: List<Move>,
         playerName: String,
-        opponentName: String
+        opponentName: String,
+        allGames: List<Game>
     ): Pair<Float, List<Pair<String, String>>> {
 
         var myHits = 0
@@ -81,15 +81,19 @@ object InferenceEngine {
         val oppActiveBlood = Math.max(0.0, oppHits - (oppSunks * 3.4)).toFloat()
 
         // --- FETCH THE DYNAMIC PAIRWISE BIAS ---
-        val w0 = getPairwiseBias(playerName, opponentName)
+        val w0 = getPairwiseBias(playerName, opponentName, allGames)
 
         var z = w0 +
                 (WEIGHT_SUNK_DIFF * sunkDiff) +
                 (WEIGHT_MY_ACTIVE_BLOOD * myActiveBlood) +
                 (WEIGHT_OPP_ACTIVE_BLOOD * oppActiveBlood)
 
+        // Decay First Blood over time (assumes a max game length of ~40 turns)
+        val turnCount = gameMoves.count { it.result == "MISS" || it.result == "HIT" || it.isSunk } / 2f
+        val firstBloodDecay = Math.max(0.0, 1.0 - (turnCount / 40.0)).toFloat()
+
         if (iGotFirstBlood) {
-            z += WEIGHT_PLAYER_FIRST_BLOOD
+            z += (WEIGHT_PLAYER_FIRST_BLOOD * firstBloodDecay)
         }
 
         val clampedZ = z.coerceIn(-20f, 20f)
