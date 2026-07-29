@@ -247,7 +247,15 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     var lastBotHeatmap by mutableStateOf<Array<IntArray>?>(null); private set
     var lastBotDiagnosticMap by mutableStateOf<Array<IntArray>?>(null); private set
 
-    private val _currentWidgetTheme = MutableStateFlow(WidgetTheme.STANDARD_GAUGE)
+    private val prefs = context.getSharedPreferences("battleship_prefs", Context.MODE_PRIVATE)
+
+    private val _currentWidgetTheme = MutableStateFlow(
+        try {
+            WidgetTheme.valueOf(prefs.getString("widget_theme", WidgetTheme.STANDARD_GAUGE.name) ?: WidgetTheme.STANDARD_GAUGE.name)
+        } catch (e: Exception) {
+            WidgetTheme.STANDARD_GAUGE
+        }
+    )
     val currentWidgetTheme: StateFlow<WidgetTheme> = _currentWidgetTheme.asStateFlow()
 
     private fun clearTemporalState() {
@@ -275,7 +283,9 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
     fun cycleWidgetTheme() {
         val themes = WidgetTheme.values()
         val nextIndex = (themes.indexOf(_currentWidgetTheme.value) + 1) % themes.size
-        _currentWidgetTheme.value = themes[nextIndex]
+        val nextTheme = themes[nextIndex]
+        _currentWidgetTheme.value = nextTheme
+        prefs.edit().putString("widget_theme", nextTheme.name).apply()
     }
 
     fun setOpponentFilter(filter: String) { _opponentFilter.value = filter }

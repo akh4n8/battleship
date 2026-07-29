@@ -167,6 +167,8 @@ object TrendEngine {
 
         val basicStats = mapOf(
             "Matches Played" to targetGames.size.toString(),
+            "Wins" to wins.size.toString(),
+            "Losses" to losses.size.toString(),
             "Avg Match Length" to "$avgTotalShots Shots\n($avgTotalTurns Turns)",
             "Strike Accuracy" to "$accuracy%",
             "Opp. Accuracy" to "$oppAccuracy%",
