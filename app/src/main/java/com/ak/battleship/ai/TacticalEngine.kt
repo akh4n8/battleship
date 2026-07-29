@@ -1354,27 +1354,22 @@ private object MycroftBot {
  */
 object MoriartyBot {
 
-    private var cachedDefenseBuffer: java.nio.MappedByteBuffer? = null
-    private var cachedOffenseBuffer: java.nio.MappedByteBuffer? = null
+    private val cachedBuffers = mutableMapOf<String, java.nio.MappedByteBuffer>()
 
-    private fun getModelBuffer(context: Context, isOffense: Boolean): java.nio.MappedByteBuffer {
-        val fileName = if (isOffense) "moriarty_offense.tflite" else "moriarty_defense.tflite"
-        if (isOffense) {
-            if (cachedOffenseBuffer == null) {
-                val fd = context.assets.openFd(fileName)
-                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
-                    cachedOffenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
-                }
-            }
-            return cachedOffenseBuffer!!
+    private fun getModelBuffer(context: Context, isOffense: Boolean, playerName: String): java.nio.MappedByteBuffer {
+        val fileName = if (isOffense) {
+            if (playerName.equals("luki", ignoreCase = true)) "moriarty_luki_offense.tflite"
+            else if (playerName.equals("grandma", ignoreCase = true)) "moriarty_grandma_offense.tflite"
+            else "moriarty_offense.tflite"
         } else {
-            if (cachedDefenseBuffer == null) {
-                val fd = context.assets.openFd(fileName)
-                java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
-                    cachedDefenseBuffer = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
-                }
+            "moriarty_defense.tflite"
+        }
+        
+        return cachedBuffers.getOrPut(fileName) {
+            val fd = context.assets.openFd(fileName)
+            java.io.FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
             }
-            return cachedDefenseBuffer!!
         }
     }
 
@@ -1405,14 +1400,16 @@ object MoriartyBot {
         val historySlice = validGames.takeLast(5)
         val movesByGameId = allMoves.groupBy { it.gameId }
 
-        val stepsCount = if (liveMoves != null) 6 else 5
-        val flatTensor = FloatArray(stepsCount * 7 * 10 * 10)
+        val isOffense = (liveMoves != null)
+        val stepsCount = if (isOffense) 6 else 5
+        val numChannels = if (isOffense) 5 else 7
+        val flatTensor = FloatArray(stepsCount * numChannels * 10 * 10)
         var tensorIdx = 0
 
         var cumulativeTraumaMisses = Array(10) { FloatArray(10) { 0.0f } }
         var cumulativeTraumaHits = Array(10) { FloatArray(10) { 0.0f } }
 
-        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, traumaHitsMatrix: Array<FloatArray>, isLiveStep: Boolean) {
+        fun bakeChannels(gameMoves: List<Move>, traumaMatrix: Array<FloatArray>, traumaHitsMatrix: Array<FloatArray>, isLiveStep: Boolean, botMisses: Array<FloatArray>?, botHits: Array<FloatArray>?) {
             val playerIsP1 = if (isLiveStep) true else (gameMoves.firstOrNull()?.let { m ->
                 val g = validGames.find { it.id == m.gameId }
                 g?.playerName.equals(targetPlayer, ignoreCase = true)
@@ -1466,26 +1463,36 @@ object MoriartyBot {
                 }
             }
 
-            for (ch in 0..6) {
+            for (ch in 0 until numChannels) {
                 for (y in 0..9) {
                     for (x in 0..9) {
-                        flatTensor[tensorIdx++] = when (ch) {
-                            0 -> traumaMatrix[x][y]
-                            1 -> traumaHitsMatrix[x][y]
-                            2 -> chHumanMisses[x][y]
-                            3 -> chHumanHits[x][y]
-                            4 -> chClustering[x][y]
-                            5 -> chChronology[x][y]
-                            else -> chSpatial[x][y]
+                        flatTensor[tensorIdx++] = if (isOffense) {
+                            when (ch) {
+                                0 -> if (isLiveStep) 0.0f else chSpatial[x][y]
+                                1 -> traumaMatrix[x][y]
+                                2 -> traumaHitsMatrix[x][y]
+                                3 -> botMisses?.get(x)?.get(y) ?: 0.0f
+                                4 -> botHits?.get(x)?.get(y) ?: 0.0f
+                                else -> 0.0f
+                            }
+                        } else {
+                            when (ch) {
+                                0 -> traumaMatrix[x][y]
+                                1 -> traumaHitsMatrix[x][y]
+                                2 -> chHumanMisses[x][y]
+                                3 -> chHumanHits[x][y]
+                                4 -> chClustering[x][y]
+                                5 -> chChronology[x][y]
+                                else -> chSpatial[x][y]
+                            }
                         }
                     }
                 }
             }
         }
 
-        for (game in historySlice) {
+        for (game in validGames) {
             val gameMoves = movesByGameId[game.id] ?: emptyList()
-            bakeChannels(gameMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = false)
 
             val playerIsP1 = game.playerName.equals(targetPlayer, ignoreCase = true)
             val botShots = gameMoves.filter { m ->
@@ -1511,6 +1518,10 @@ object MoriartyBot {
                 }
             }
 
+            if (historySlice.contains(game)) {
+                bakeChannels(gameMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = false, currentBotMisses, currentBotHits)
+            }
+
             for (x in 0..9) {
                 for (y in 0..9) {
                     cumulativeTraumaMisses[x][y] = (cumulativeTraumaMisses[x][y] * 0.85f) + currentBotMisses[x][y]
@@ -1520,7 +1531,30 @@ object MoriartyBot {
         }
 
         if (liveMoves != null) {
-            bakeChannels(liveMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = true)
+            val playerIsP1 = true
+            val botShots = liveMoves.filter { m ->
+                (m.isOffense != playerIsP1) && !isShipData(m.result)
+            }
+            val humanShips = liveMoves.filter { m ->
+                (m.isOffense != playerIsP1) && isShipData(m.result)
+            }
+
+            val currentBotMisses = Array(10) { FloatArray(10) { 0.0f } }
+            val currentBotHits = Array(10) { FloatArray(10) { 0.0f } }
+            
+            botShots.forEach { move ->
+                if (move.x in 0..9 && move.y in 0..9) {
+                    val isHit = move.result == "HIT" || move.isSunk
+                    if (isHit) {
+                        val shipHit = humanShips.find { it.x == move.x && it.y == move.y }
+                        val weight = if (shipHit != null) getShipWeight(shipHit.result) else 0.7f
+                        currentBotHits[move.x][move.y] += weight
+                    } else {
+                        currentBotMisses[move.x][move.y] += 1.0f
+                    }
+                }
+            }
+            bakeChannels(liveMoves, cumulativeTraumaMisses, cumulativeTraumaHits, isLiveStep = true, currentBotMisses, currentBotHits)
         }
 
         return flatTensor
@@ -1538,7 +1572,8 @@ object MoriartyBot {
         val flatData = buildMultiChannelTensor(playerName, allGames, allMoves, liveMoves, limitTimestamp) ?: return null
 
         val steps = if (isOffense) 6 else 5
-        val totalBytes = steps * 7 * 10 * 10 * 4
+        val numChannels = if (isOffense) 5 else 7
+        val totalBytes = steps * numChannels * 10 * 10 * 4
 
         val inputBuffer = java.nio.ByteBuffer.allocateDirect(totalBytes).apply {
             order(java.nio.ByteOrder.nativeOrder())
@@ -1547,7 +1582,7 @@ object MoriartyBot {
         inputBuffer.rewind()
 
         val outputBuffer = Array(1) { FloatArray(100) }
-        val interpreter = org.tensorflow.lite.Interpreter(getModelBuffer(context, isOffense))
+        val interpreter = org.tensorflow.lite.Interpreter(getModelBuffer(context, isOffense, playerName))
         interpreter.run(inputBuffer, outputBuffer)
         interpreter.close()
 

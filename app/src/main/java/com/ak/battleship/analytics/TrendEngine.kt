@@ -167,17 +167,17 @@ object TrendEngine {
 
         val basicStats = mapOf(
             "Matches Played" to targetGames.size.toString(),
+            "Avg Match Length" to "$avgTotalShots Shots\n($avgTotalTurns Turns)",
             "Wins" to wins.size.toString(),
             "Losses" to losses.size.toString(),
-            "Avg Match Length" to "$avgTotalShots Shots\n($avgTotalTurns Turns)",
-            "Strike Accuracy" to "$accuracy%",
-            "Opp. Accuracy" to "$oppAccuracy%",
             "Win Rate" to "$winRate%",
             "Loss Rate" to "$lossRate%",
+            "Avg Win" to "$avgShotsToWin Shots\n($avgTurnsToWin Turns)",
+            "Avg Loss" to "$avgShotsToLose Shots\n($avgTurnsToLose Turns)",
             "Fastest Victory" to if (fastestWinShots > 0) "$fastestWinShots Shots\n($fastestWinTurns Turns)" else "N/A",
             "Fastest Defeat" to if (fastestLossShots > 0) "$fastestLossShots Shots\n($fastestLossTurns Turns)" else "N/A",
-            "Avg Win" to "$avgShotsToWin Shots\n($avgTurnsToWin Turns)",
-            "Avg Loss" to "$avgShotsToLose Shots\n($avgTurnsToLose Turns)"
+            "Strike Accuracy" to "$accuracy%",
+            "Opp. Accuracy" to "$oppAccuracy%"
         )
 
         val wildStats = mapOf(
