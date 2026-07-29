@@ -1562,9 +1562,9 @@ object MoriartyBot {
         }
 
         val priorMap = Array(10) { FloatArray(10) { 1.0f } }
-        for (y in 0 until 10) {
-            for (x in 0 until 10) {
-                val flatIndex = y * 10 + x
+        for (x in 0 until 10) {
+            for (y in 0 until 10) {
+                val flatIndex = x * 10 + y
                 priorMap[x][y] = if (averageProb > 0f) probabilities[flatIndex] / averageProb else 1.0f
             }
         }
