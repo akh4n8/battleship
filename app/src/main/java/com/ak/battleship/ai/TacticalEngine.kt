@@ -1358,9 +1358,7 @@ object MoriartyBot {
 
     private fun getModelBuffer(context: Context, isOffense: Boolean, playerName: String): java.nio.MappedByteBuffer {
         val fileName = if (isOffense) {
-            if (playerName.equals("luki", ignoreCase = true)) "moriarty_luki_offense.tflite"
-            else if (playerName.equals("grandma", ignoreCase = true)) "moriarty_grandma_offense.tflite"
-            else "moriarty_offense.tflite"
+            "moriarty_offense.tflite"
         } else {
             "moriarty_defense.tflite"
         }
