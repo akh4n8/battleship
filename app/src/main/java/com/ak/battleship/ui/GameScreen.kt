@@ -891,15 +891,18 @@ fun InteractiveCanvasGrid(
                     var drawDensity = 0f
                     var shouldDraw = false
 
-                    if (!isHit && densityMap[col][row] > 0) {
-                        drawDensity = densityMap[col][row].toFloat()
-                        shouldDraw = true
-                    } else if (isHit && shipOnCell != null && !isSunk) {
-                        val remainingHeat = shipOnCell.getCells().filter { c -> !actualShots.any { shot -> shot.x == c.first && shot.y == c.second } }.maxOfOrNull { c -> densityMap[c.first][c.second] } ?: 0
-                        if (remainingHeat > 0) {
-                            drawDensity = remainingHeat.toFloat()
+                    if (!isHit) {
+                        if (densityMap[col][row] > 0) {
+                            drawDensity = densityMap[col][row].toFloat()
+                            shouldDraw = true
+                        } else if (shipOnCell != null && !isSunk) {
+                            drawDensity = 0f
                             shouldDraw = true
                         }
+                    } else if (shipOnCell != null && !isSunk) {
+                        val remainingHeat = shipOnCell.getCells().filter { c -> !actualShots.any { shot -> shot.x == c.first && shot.y == c.second } }.maxOfOrNull { c -> densityMap[c.first][c.second] } ?: 0
+                        drawDensity = remainingHeat.toFloat()
+                        shouldDraw = true
                     }
 
                     if (shouldDraw) {

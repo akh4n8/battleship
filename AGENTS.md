@@ -65,6 +65,11 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 * **onnx2tf Syntax:** Do NOT use the deprecated `--overwrite_training_parameters` flag with modern `onnx2tf` versions.
 * **TFLite Environment:** When running `onnx2tf` for TFLite conversion, you MUST use `ai-edge-litert` (v2.14.0+) rather than generic `tflite-runtime` or `tensorflow`, or the layer normalizations will fail.
 
+### 3. ML Architecture Anti-Patterns (Lessons Learned)
+* **The Wins-Only Fallacy:** Never filter training data by "Win" status. Defensive profiling data (ship placements) is completely independent of who won the race. Filtering starves the CNN of valuable psychological profiling data.
+* **Bayesian Prior (6-Channel) CNN Injection:** CNNs fundamentally struggle to leverage sparse historical prior grids (Bayesian priors) when injected as an extra input channel without massive real-world multi-player pre-training, leading to severe overfitting. The Universal 5-Channel spatial geometry model mathematically outperforms personalized 6-channel priors.
+* **Probability Matrix Multiplication (Synthesized Heatmaps):** Never mathematically multiply the CNN probability tensor by algorithmic density matrices (e.g., MCMC or Adler priors). Algorithmic math acts as a restrictive filter that dilutes the NN's hyper-accurate psych-profiling, bleeding efficiency. MCMC must remain an **isolated, mutually-exclusive fallback** (Full Fidelity mode), not a multiplier.
+
 ---
 
 ## 🛠️ Version Control & Documentation Protocol (STRICT)

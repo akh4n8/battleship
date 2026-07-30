@@ -121,17 +121,17 @@ fun IllusionistWidget(
 
             smokeAlpha.animateTo(0f, tween(800, easing = EaseOutCubic))
             combatPulse.animateTo(0f, tween(500, easing = EaseOutQuad))
-            magicSequence.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+            magicSequence.animateTo(1f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow))
         }
     }
 
     val targetTheme = when {
-        animatedProb >= 1f -> MagicThemeState("GRAND ILLUSION", "THE MASTER REVEALED", Color(0xFFFFD700), MagicApparatus.GRAND_FINALE)
-        animatedProb > 0.85f -> MagicThemeState("THE PRESTIGE", "GRAND FINALE READY", Color(0xFFE040FB), MagicApparatus.THE_PRESTIGE)
-        animatedProb > 0.60f -> MagicThemeState("THE TURN", "ILLUSION IN PROGRESS", Color(0xFF7C4DFF), MagicApparatus.THE_TURN)
-        animatedProb > 0.40f -> MagicThemeState("THE PLEDGE", "MISDIRECTION ACTIVE", Color(0xFF448AFF), MagicApparatus.THE_PLEDGE)
-        animatedProb > 0.15f -> MagicThemeState("MISDIRECTION", "THE EYE IS DECEIVED", Color(0xFF03DAC5), MagicApparatus.MISDIRECTION)
-        animatedProb > 0f -> MagicThemeState("TRICK EXPOSED", "THE VEIL IS TORN", Color(0xFFFF5252), MagicApparatus.TRICK_EXPOSED)
+        probability >= 1f -> MagicThemeState("GRAND ILLUSION", "THE MASTER REVEALED", Color(0xFFFFD700), MagicApparatus.GRAND_FINALE)
+        probability > 0.85f -> MagicThemeState("THE PRESTIGE", "GRAND FINALE READY", Color(0xFFE040FB), MagicApparatus.THE_PRESTIGE)
+        probability > 0.60f -> MagicThemeState("THE TURN", "ILLUSION IN PROGRESS", Color(0xFF7C4DFF), MagicApparatus.THE_TURN)
+        probability > 0.40f -> MagicThemeState("THE PLEDGE", "MISDIRECTION ACTIVE", Color(0xFF448AFF), MagicApparatus.THE_PLEDGE)
+        probability > 0.15f -> MagicThemeState("MISDIRECTION", "THE EYE IS DECEIVED", Color(0xFF03DAC5), MagicApparatus.MISDIRECTION)
+        probability > 0f -> MagicThemeState("TRICK EXPOSED", "THE VEIL IS TORN", Color(0xFFFF5252), MagicApparatus.TRICK_EXPOSED)
         else -> MagicThemeState("VANISHED", "WITHOUT A TRACE", Color(0xFFD32F2F), MagicApparatus.VANISHED)
     }
 
@@ -174,7 +174,7 @@ fun IllusionistWidget(
             }
 
             // 3. THE APPARATUS
-            val apparatusY = centerY + floatAnim.dp.toPx()
+            val apparatusY = centerY + 28.dp.toPx() + floatAnim.dp.toPx()
 
             when (targetTheme.apparatus) {
                 MagicApparatus.GRAND_FINALE -> drawGrandFinale(centerX, apparatusY, themeColor, time)
@@ -204,11 +204,12 @@ fun IllusionistWidget(
 
             // 5. SMOKE BURST (Transition Effect)
             if (smokeAlpha.value > 0f) {
+                val burstCenterY = apparatusY - 28.dp.toPx()
                 for (i in 0..5) {
                     val angle = (i * 60f) * (PI.toFloat() / 180f)
                     val expansion = 50.dp.toPx() * (1f - smokeAlpha.value)
                     val sx = centerX + cos(angle) * expansion
-                    val sy = apparatusY + sin(angle) * expansion
+                    val sy = burstCenterY + sin(angle) * expansion
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(Color.White.copy(alpha = smokeAlpha.value * 0.5f), Color.Transparent),
@@ -670,7 +671,7 @@ private fun DrawScope.drawMissDeflection(x: Float, y: Float, p: Float, color: Co
     val thickness = maxOf(0f, 1f - p) * 10.dp.toPx()
     
     drawCircle(
-        color = color.copy(alpha = 1f - p),
+        color = color.copy(alpha = (1f - p).coerceIn(0f, 1f)),
         radius = radius,
         center = Offset(x, y - 20.dp.toPx()),
         style = Stroke(width = thickness)
@@ -684,7 +685,7 @@ private fun DrawScope.drawMissDeflection(x: Float, y: Float, p: Float, color: Co
             val rStart = 60.dp.toPx()
             val rEnd = rStart + shatterP * 30.dp.toPx()
             drawLine(
-                color = color.copy(alpha = 1f - shatterP),
+                color = color.copy(alpha = (1f - shatterP).coerceIn(0f, 1f)),
                 start = Offset(x + cos(angle) * rStart, y - 20.dp.toPx() + sin(angle) * rStart),
                 end = Offset(x + cos(angle) * rEnd, y - 20.dp.toPx() + sin(angle) * rEnd),
                 strokeWidth = 2.dp.toPx() * (1f - shatterP),
