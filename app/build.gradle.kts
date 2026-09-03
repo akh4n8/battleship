@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     // FIXED: Matched KSP version strictly to Kotlin 2.2.10 to prevent "unexpected jvm signature V"
-    id("com.google.devtools.ksp") version "2.2.10-2.0.2"
+    id("com.google.devtools.ksp") version "2.3.6"
 }
 
 android {

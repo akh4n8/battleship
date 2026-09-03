@@ -61,9 +61,9 @@ fun TutorialDialog(
                 iconTint = Color(0xFF6750A4),
                 cards = listOf(
                     TutorialCardItem(
-                        title = "Bot Match (AI Duel)",
-                        subtitle = "Test your mettle against 5 tiers of custom AI—from Watson's pure spatial density to Moriarty's neural networks.",
-                        icon = Icons.Default.SmartToy
+                        title = "Companion Mode (Physical Board)",
+                        subtitle = "Playing on a real plastic Battleship board? Use this app as your digital radar! Log shots, track live win odds, and verify secret fleets.",
+                        icon = Icons.Default.Sensors
                     ),
                     TutorialCardItem(
                         title = "Pass & Play (Hot Seat)",
@@ -71,9 +71,9 @@ fun TutorialDialog(
                         icon = Icons.Default.Group
                     ),
                     TutorialCardItem(
-                        title = "Companion Mode (Physical Board)",
-                        subtitle = "Playing on a real plastic Battleship board? Use this app as your digital radar! Log shots, track live win odds, and verify secret fleets.",
-                        icon = Icons.Default.Sensors
+                        title = "Bot Match (AI Duel)",
+                        subtitle = "Test your mettle against 5 tiers of custom AI—from Watson's pure spatial density to Moriarty's neural networks.",
+                        icon = Icons.Default.SmartToy
                     )
                 )
             ),
@@ -95,11 +95,6 @@ fun TutorialDialog(
                         subtitle = "Your turn only concludes when a shot hits open water. Keep calm, deduce adjacent coordinates, and protect your streak.",
                         icon = Icons.Default.Close,
                         highlightColor = Color(0xFFC62828)
-                    ),
-                    TutorialCardItem(
-                        title = "100-Shot Max Ceiling",
-                        subtitle = "A strict 100-move ceiling ensures swift, decisive naval skirmishes with zero deadlocked stalemates.",
-                        icon = Icons.Default.Timer
                     )
                 )
             ),
