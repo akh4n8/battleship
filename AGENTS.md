@@ -8,6 +8,7 @@ The project strictly follows Unidirectional Data Flow (UDF) and MVVM architectur
 
 * **`ai/`**: Bot logic, probability density, and target selection. *(**See `AI_ROADMAP.md`** before modifying).*
 * **`ui/` & `widgets/`**: Interactive grids, debug layers, and themeable components reacting to `PlaybackCommand`. *(**See `UI_ANIMATION_RULES.md`** before modifying).*
+* **`ui/tutorial/`**: Interactive multi-step onboarding & rules walkthrough (`TutorialDialog`).
 * **`analytics/`**:
   * `InferenceEngine`: Calculates live win probability using pairwise Z-Scores.
   * `TrendEngine`: Aggregates historical performance metrics.

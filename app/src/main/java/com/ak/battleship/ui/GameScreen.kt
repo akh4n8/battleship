@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -441,6 +442,10 @@ fun GameTopBar(viewModel: BattleshipViewModel, isOffense: Boolean, phase: GamePh
                 Tab(selected = isOffense, onClick = { viewModel.setMode(true) }) { Text("Offense", modifier = Modifier.padding(12.dp)) }
                 Tab(selected = !isOffense, onClick = { viewModel.setMode(false) }) { Text("Defense", modifier = Modifier.padding(12.dp)) }
             }
+        }
+
+        IconButton(onClick = { viewModel.openTutorial() }) {
+            Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "How to Play / Rules")
         }
     }
 }

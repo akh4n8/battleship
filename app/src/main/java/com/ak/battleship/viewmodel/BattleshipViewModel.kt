@@ -249,6 +249,21 @@ class BattleshipViewModel(private val dao: BattleshipDao, private val context: C
 
     private val prefs = context.getSharedPreferences("battleship_prefs", Context.MODE_PRIVATE)
 
+    var isTutorialDialogVisible by mutableStateOf(
+        !prefs.getBoolean("has_seen_tutorial_v1", false)
+    ); private set
+
+    fun openTutorial() {
+        isTutorialDialogVisible = true
+    }
+
+    fun dismissTutorial(dontShowAgain: Boolean = true) {
+        isTutorialDialogVisible = false
+        if (dontShowAgain) {
+            prefs.edit().putBoolean("has_seen_tutorial_v1", true).apply()
+        }
+    }
+
     private val _currentWidgetTheme = MutableStateFlow(
         try {
             WidgetTheme.valueOf(prefs.getString("widget_theme", WidgetTheme.STANDARD_GAUGE.name) ?: WidgetTheme.STANDARD_GAUGE.name)

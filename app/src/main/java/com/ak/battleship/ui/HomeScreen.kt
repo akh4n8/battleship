@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -105,7 +107,19 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Battleship", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Button(onClick = { viewModel.openAnalytics() }) { Text("Analytics Dashboard", fontWeight = FontWeight.Bold) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(onClick = { viewModel.openTutorial() }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                        contentDescription = "How to Play / Rules",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Button(onClick = { viewModel.openAnalytics() }) { Text("Analytics", fontWeight = FontWeight.Bold) }
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

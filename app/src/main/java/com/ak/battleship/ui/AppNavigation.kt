@@ -2,6 +2,7 @@ package com.ak.battleship.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import com.ak.battleship.ui.tutorial.TutorialDialog
 import com.ak.battleship.viewmodel.BattleshipViewModel
 
 /**
@@ -34,5 +35,13 @@ fun AppNavigation(viewModel: BattleshipViewModel) {
             // Pressing back here WILL safely close the app.
             HomeScreen(viewModel)
         }
+    }
+
+    if (viewModel.isTutorialDialogVisible) {
+        TutorialDialog(
+            onDismiss = { dontShowAgain ->
+                viewModel.dismissTutorial(dontShowAgain)
+            }
+        )
     }
 }
