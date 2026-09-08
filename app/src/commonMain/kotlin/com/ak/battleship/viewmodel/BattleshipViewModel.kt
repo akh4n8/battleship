@@ -129,22 +129,6 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
     var historyScrollIndex by mutableIntStateOf(0)
     var historyScrollOffset by mutableIntStateOf(0)
 
-    // --- TELEMETRY ---
-    var telemetryOptIn by mutableStateOf(false)
-        private set
-    var playerAlias by mutableStateOf("Anonymous")
-        private set
-
-    fun setTelemetryOptIn(optIn: Boolean) {
-        telemetryOptIn = optIn
-        settingsManager.setBoolean("telemetry_opt_in", optIn)
-    }
-
-    fun setPlayerAlias(alias: String) {
-        playerAlias = alias
-        settingsManager.setString("player_alias", alias)
-    }
-
     // --- GAME STATE ---
     var currentGameId by mutableStateOf<Int?>(null); private set
     var currentGame by mutableStateOf<Game?>(null); private set
@@ -273,6 +257,39 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
         if (dontShowAgain) {
             settingsManager.setBoolean("has_seen_tutorial_v1", true)
         }
+        if (!hasSeenTelemetryNotice) {
+            showTelemetryDialog = true
+        }
+    }
+
+    // --- TELEMETRY ---
+    var telemetryOptIn by mutableStateOf(
+        settingsManager.getBoolean("telemetry_opt_in", true)
+    ); private set
+
+    var hasSeenTelemetryNotice by mutableStateOf(
+        settingsManager.getBoolean("has_seen_telemetry_notice", false)
+    ); private set
+
+    var showTelemetryDialog by mutableStateOf(
+        !settingsManager.getBoolean("has_seen_telemetry_notice", false) && settingsManager.getBoolean("has_seen_tutorial_v1", false)
+    )
+
+    fun openTelemetryDialog() {
+        showTelemetryDialog = true
+    }
+
+    fun dismissTelemetryDialog() {
+        showTelemetryDialog = false
+        if (!hasSeenTelemetryNotice) {
+            hasSeenTelemetryNotice = true
+            settingsManager.setBoolean("has_seen_telemetry_notice", true)
+        }
+    }
+
+    fun setTelemetryOptIn(optIn: Boolean) {
+        telemetryOptIn = optIn
+        settingsManager.setBoolean("telemetry_opt_in", optIn)
     }
 
     private val _currentWidgetTheme = MutableStateFlow(
@@ -844,7 +861,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                         """{"turn":${m.turnNumber},"x":${m.x},"y":${m.y},"result":"${m.result}","is_offense":${m.isOffense}}"""
                     } + "]"
                     val payload = com.ak.battleship.network.buildTelemetryPayload(
-                        playerAlias = playerAlias,
+                        playerAlias = "Anonymous",
                         opponent = activeGame.opponentName,
                         gameMode = activeGame.gameMode,
                         outcome = finalResult,
