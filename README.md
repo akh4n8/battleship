@@ -1,4 +1,4 @@
-# ⚓ Battleship: Multiplatform & AI Research Lab
+# ⚓ Battleship
 
 [![Live Web Demo](https://img.shields.io/badge/Play%20Live-GitHub%20Pages-blue?style=for-the-badge&logo=github)](https://akh4n8.github.io/battleship/)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?style=for-the-badge&logo=kotlin)](https://kotlinlang.org/)
@@ -38,6 +38,7 @@ Play directly in your browser with zero installation:
 | **Sherlock** | Constraint Satisfaction Problem (CSP) | Analytical solver using deduction sweeps to guarantee a strict mathematical ceiling on wasted shots. |
 | **Mycroft** | Monte Carlo Joint-Probability | Executes a 100,000-step zero-allocation MCMC loop using 128-bit bitboards for joint probability calculation. |
 | **Adler** | Adaptive Counter-Strategy | Analyzes player tendencies and dynamically shifts between offensive hunting and defensive counter-placement. |
+| **Moriarty** | Neural Network Sequencer | Uses psychological profiling and neural networks for offensive hunting and defensive ship placements. |
 
 ---
 
