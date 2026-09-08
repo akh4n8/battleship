@@ -264,7 +264,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
 
     // --- TELEMETRY ---
     var telemetryOptIn by mutableStateOf(
-        settingsManager.getBoolean("telemetry_opt_in", true)
+        settingsManager.getBoolean("telemetry_opt_in", false)
     ); private set
 
     var hasSeenTelemetryNotice by mutableStateOf(

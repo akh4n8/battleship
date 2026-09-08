@@ -99,7 +99,7 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
             text = {
                 Column {
                     Text(
-                        "Help our club train smarter Battleship bots! When enabled, anonymous match data (shot coordinates, hits/misses, and game outcomes) is automatically contributed to our research database when a match finishes.",
+                        "Help train smarter Battleship bots! When enabled, anonymous match data (shot coordinates, hits/misses, and game outcomes) is contributed to our research database when a match finishes.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(Modifier.height(12.dp))

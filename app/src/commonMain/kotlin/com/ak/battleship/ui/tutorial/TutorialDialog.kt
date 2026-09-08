@@ -67,7 +67,7 @@ fun TutorialDialog(
                     ),
                     TutorialCardItem(
                         title = "Pass & Play (Hot Seat)",
-                        subtitle = "Pass the phone between turns to battle a friend sitting right beside you in the club.",
+                        subtitle = "Pass the device between turns to battle a friend sitting right beside you.",
                         icon = Icons.Default.Group
                     ),
                     TutorialCardItem(
