@@ -1,9 +1,67 @@
+@OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 plugins {
+    alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    // FIXED: Matched KSP version strictly to Kotlin 2.2.10 to prevent "unexpected jvm signature V"
+    alias(libs.plugins.jetbrains.compose)
     id("com.google.devtools.ksp") version "2.3.6"
+}
+
+kotlin {
+    androidTarget()
+    
+    wasmJs {
+        // compilerOptions DSL is used for moduleName if needed, but not strictly required
+        browser {
+            val projectDirPath = project.projectDir.path
+            commonWebpackConfig {
+                outputFileName = "battleship.js"
+                devServer = (devServer ?: org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig.DevServer()).apply {
+                    static = (static ?: mutableListOf()).apply {
+                        // Serve sources to debug inside browser
+                        add(projectDirPath)
+                    }
+                }
+            }
+        }
+        binaries.executable()
+    }
+
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation(compose.materialIconsExtended)
+                implementation(compose.ui)
+                implementation(compose.components.resources)
+                implementation(compose.components.uiToolingPreview)
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+                implementation("androidx.room:room-common:2.7.0")
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.androidx.activity.compose)
+                val roomVersion = "2.7.0"
+                implementation("androidx.room:room-runtime:$roomVersion")
+                implementation("androidx.room:room-ktx:$roomVersion")
+                implementation("org.tensorflow:tensorflow-lite:2.14.0")
+                implementation("androidx.datastore:datastore-preferences:1.0.0")
+                implementation("com.airbnb.android:lottie-compose:6.0.0")
+            }
+        }
+        val wasmJsMain by getting {
+            dependencies {
+            }
+        }
+    }
 }
 
 android {
@@ -16,71 +74,18 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
-    buildTypes {
-        release {
-            // Turn on R8 minification and code optimization
-            isMinifyEnabled = true
-
-            // Turn on resource shrinking to trim the APK size
-            isShrinkResources = true
-
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-
-            // Use the local debug key to sign this optimized build
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
     compileOptions {
-        // FIXED: Upgraded compilation requirements to Java 17 to prevent R8 task warning-as-error failures
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        // FIXED: Updated JVM target mapping to match Java 17 toolchains
-        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
     }
-    androidResources {
-        noCompress("tflite")
-    }
 }
 
 dependencies {
-    // Room Database
-    // FIXED: Upgraded Room to 2.7.0 to support Kotlin 2.2.10 and KSP2 backend
     val roomVersion = "2.7.0"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
-    // FIXED: Swapped kapt compiler hook out for the robust KSP processor hook
-    ksp("androidx.room:room-compiler:$roomVersion")
-
-    // Compose BOM 2024.12.01 (Stable)
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
-    implementation(composeBom)
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-
-    implementation("com.airbnb.android:lottie-compose:6.0.0")
-
-    // Check for the latest stable version depending on your target (Android vs Desktop)
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-
-    implementation("androidx.compose.material:material-icons-extended")
-
-    // Add this to your dependencies block:
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
-    testImplementation(kotlin("test"))
+    add("kspAndroid", "androidx.room:room-compiler:$roomVersion")
 }
