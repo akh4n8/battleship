@@ -3,6 +3,8 @@ package com.ak.battleship.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +42,7 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
     // --- DIALOG STATES ---
     var gameToDelete by remember { mutableStateOf<Game?>(null) }
     var gameToRename by remember { mutableStateOf<Game?>(null) }
+    var showTelemetryDialog by remember { mutableStateOf(false) }
 
     val onExport = rememberCsvExporter(viewModel, null)
     val onImport = rememberCsvImporter(viewModel, null)
@@ -78,6 +81,42 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
         }
     }
 
+
+    if (showTelemetryDialog) {
+        AlertDialog(
+            onDismissRequest = { showTelemetryDialog = false },
+            title = { Text("AI Research Telemetry") },
+            text = {
+                Column {
+                    Text("Help our club train better Battleship bots! By opting in, your game board and shot coordinates will be anonymously uploaded to our Supabase dataset when a match finishes.")
+                    Spacer(Modifier.height(16.dp))
+                    Text("We do NOT collect IP addresses, real names, or device information.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(16.dp))
+                    
+                    OutlinedTextField(
+                        value = viewModel.playerAlias,
+                        onValueChange = { viewModel.setPlayerAlias(it) },
+                        label = { Text("Your Callsign / Alias") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = viewModel.telemetryOptIn,
+                            onCheckedChange = { viewModel.setTelemetryOptIn(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Enable Anonymous Telemetry")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTelemetryDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
     // --- MAIN LAYOUT ---
     Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp)) {
         // Header
@@ -96,6 +135,13 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
                         imageVector = Icons.AutoMirrored.Filled.HelpOutline,
                         contentDescription = "How to Play / Rules",
                         tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = { showTelemetryDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = "Telemetry Settings",
+                        tint = if (viewModel.telemetryOptIn) MaterialTheme.colorScheme.primary else Color.Gray
                     )
                 }
                 Button(onClick = { viewModel.openAnalytics() }) { Text("Analytics", fontWeight = FontWeight.Bold) }

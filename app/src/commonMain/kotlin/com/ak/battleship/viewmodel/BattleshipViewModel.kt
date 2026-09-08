@@ -129,6 +129,23 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
     var historyScrollIndex by mutableIntStateOf(0)
     var historyScrollOffset by mutableIntStateOf(0)
 
+    // --- TELEMETRY ---
+    var telemetryOptIn by mutableStateOf(false)
+        private set
+    var playerAlias by mutableStateOf("Anonymous")
+        private set
+
+    fun setTelemetryOptIn(optIn: Boolean) {
+        telemetryOptIn = optIn
+        settingsManager.setBoolean("telemetry_opt_in", optIn)
+    }
+
+    fun setPlayerAlias(alias: String) {
+        playerAlias = alias
+        settingsManager.setString("player_alias", alias)
+    }
+
+    // --- GAME STATE ---
     var currentGameId by mutableStateOf<Int?>(null); private set
     var currentGame by mutableStateOf<Game?>(null); private set
     var isOffenseMode by mutableStateOf(true); private set
@@ -820,6 +837,26 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                 currentGame = updatedGame
                 widgetShotTriggerKey = 0
                 currentPhase = GamePhase.BATTLE
+                
+                if (telemetryOptIn) {
+                    val allMoves = _currentMoves.value
+                    val movesJson = "[" + allMoves.joinToString(",") { m ->
+                        """{"turn":${m.turnNumber},"x":${m.x},"y":${m.y},"result":"${m.result}","is_offense":${m.isOffense}}"""
+                    } + "]"
+                    val payload = com.ak.battleship.network.buildTelemetryPayload(
+                        playerAlias = playerAlias,
+                        opponent = activeGame.opponentName,
+                        gameMode = activeGame.gameMode,
+                        outcome = finalResult,
+                        turnCount = allMoves.size,
+                        movesJson = movesJson
+                    )
+                    com.ak.battleship.network.TelemetryClient().sendMatchData(
+                        url = "https://trizdhkyiuahznicbtij.supabase.co",
+                        anonKey = "sb_publishable_KKIBHotkK0eCsBCHYt1PWA_XZ-nw2j_",
+                        payload = payload
+                    )
+                }
             }
 
             observeCurrentGameMoves(gameId)
