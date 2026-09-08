@@ -264,7 +264,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
 
     // --- TELEMETRY ---
     var telemetryOptIn by mutableStateOf(
-        settingsManager.getBoolean("telemetry_opt_in", false)
+        settingsManager.getBoolean("telemetry_opt_in_v2", true)
     ); private set
 
     var hasSeenTelemetryNotice by mutableStateOf(
@@ -289,7 +289,30 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
 
     fun setTelemetryOptIn(optIn: Boolean) {
         telemetryOptIn = optIn
-        settingsManager.setBoolean("telemetry_opt_in", optIn)
+        settingsManager.setBoolean("telemetry_opt_in_v2", optIn)
+    }
+
+    private val sentTelemetryGameIds = mutableSetOf<String>()
+
+    private fun sendTelemetryIfOptedIn(game: Game) {
+        if (telemetryOptIn) {
+            val gid = game.id.toString()
+            if (sentTelemetryGameIds.contains(gid)) return
+            sentTelemetryGameIds.add(gid)
+
+            val allMoves = _currentMoves.value
+            val timeStr = com.ak.battleship.PlatformServices.formatTimestamp(game.timestamp)
+            val payload = com.ak.battleship.network.buildTelemetryBatchPayload(
+                game = game,
+                allMoves = allMoves,
+                formattedTimestamp = timeStr
+            )
+            com.ak.battleship.network.TelemetryClient().sendMatchData(
+                url = "https://trizdhkyiuahznicbtij.supabase.co",
+                anonKey = "sb_publishable_KKIBHotkK0eCsBCHYt1PWA_XZ-nw2j_",
+                payload = payload
+            )
+        }
     }
 
     private val _currentWidgetTheme = MutableStateFlow(
@@ -762,6 +785,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                 val updatedGame = activeGame.copy(result = pendingResult)
                 dao.updateGame(updatedGame)
                 currentGame = updatedGame
+                sendTelemetryIfOptedIn(updatedGame)
             }
 
             if (isBotGame) {
@@ -854,26 +878,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                 currentGame = updatedGame
                 widgetShotTriggerKey = 0
                 currentPhase = GamePhase.BATTLE
-                
-                if (telemetryOptIn) {
-                    val allMoves = _currentMoves.value
-                    val movesJson = "[" + allMoves.joinToString(",") { m ->
-                        """{"turn":${m.turnNumber},"x":${m.x},"y":${m.y},"result":"${m.result}","is_offense":${m.isOffense}}"""
-                    } + "]"
-                    val payload = com.ak.battleship.network.buildTelemetryPayload(
-                        playerAlias = "Anonymous",
-                        opponent = activeGame.opponentName,
-                        gameMode = activeGame.gameMode,
-                        outcome = finalResult,
-                        turnCount = allMoves.size,
-                        movesJson = movesJson
-                    )
-                    com.ak.battleship.network.TelemetryClient().sendMatchData(
-                        url = "https://trizdhkyiuahznicbtij.supabase.co",
-                        anonKey = "sb_publishable_KKIBHotkK0eCsBCHYt1PWA_XZ-nw2j_",
-                        payload = payload
-                    )
-                }
+                sendTelemetryIfOptedIn(updatedGame)
             }
 
             observeCurrentGameMoves(gameId)
