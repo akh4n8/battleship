@@ -135,7 +135,7 @@ fun HomeScreen(viewModel: BattleshipViewModel) {
                         Text("Contribute Anonymous Match Data", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Switch(
                             checked = viewModel.telemetryOptIn,
-                            onCheckedChange = { viewModel.setTelemetryOptIn(it) }
+                            onCheckedChange = { viewModel.updateTelemetryOptIn(it) }
                         )
                     }
                 }

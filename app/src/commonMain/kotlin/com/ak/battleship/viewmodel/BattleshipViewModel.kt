@@ -287,7 +287,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
         }
     }
 
-    fun setTelemetryOptIn(optIn: Boolean) {
+    fun updateTelemetryOptIn(optIn: Boolean) {
         telemetryOptIn = optIn
         settingsManager.setBoolean("telemetry_opt_in_v2", optIn)
     }
