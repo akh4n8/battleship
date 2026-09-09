@@ -23,17 +23,21 @@ class DummyRepository : GameRepository {
     private fun b64(s: String): String = Base64.encode(s.encodeToByteArray())
     private fun unb64(s: String): String = Base64.decode(s).decodeToString()
 
-    private fun saveToStorage() {
+    private fun saveGamesToStorage() {
         val gamesStr = games.value.values.joinToString("||") { g ->
             "${g.id}|${b64(g.playerName)}|${b64(g.opponentName)}|${b64(g.gameMode)}|${g.timestamp}|${g.result?.let { b64(it) } ?: ""}|${g.botBrainMetadata?.let { b64(it) } ?: ""}"
         }
         window.localStorage.setItem("battleship_games", gamesStr)
+    }
 
+    private fun saveMovesToStorage() {
         val movesStr = moves.value.joinToString("||") { m ->
             "${m.id}|${m.gameId}|${m.isOffense}|${m.x}|${m.y}|${b64(m.result)}|${m.isSunk}|${m.turnNumber}|${m.shotNumber}"
         }
         window.localStorage.setItem("battleship_moves", movesStr)
+    }
 
+    private fun saveProfilesToStorage() {
         val profilesStr = profiles.value.values.joinToString("||") { p ->
             "${b64(p.opponentName)}|${b64(p.notes)}|${b64(p.favoriteStrategy)}"
         }
@@ -101,13 +105,13 @@ class DummyRepository : GameRepository {
         val id = if (game.id == 0) nextGameId++ else game.id
         val newGame = game.copy(id = id)
         games.value = games.value + (id to newGame)
-        saveToStorage()
+        saveGamesToStorage()
         return id.toLong()
     }
 
     override suspend fun updateGame(game: Game) {
         games.value = games.value + (game.id to game)
-        saveToStorage()
+        saveGamesToStorage()
     }
 
     override suspend fun getGameById(gameId: Int): Game? {
@@ -118,36 +122,50 @@ class DummyRepository : GameRepository {
         val id = if (move.id == 0) nextMoveId++ else move.id
         val newMove = move.copy(id = id)
         moves.value = moves.value + newMove
-        saveToStorage()
+        
+        // Optimize Wasm performance: Append to localStorage instead of full rewrite
+        val existing = window.localStorage.getItem("battleship_moves") ?: ""
+        val m = newMove
+        val moveStr = "${m.id}|${m.gameId}|${m.isOffense}|${m.x}|${m.y}|${b64(m.result)}|${m.isSunk}|${m.turnNumber}|${m.shotNumber}"
+        val newMovesStr = if (existing.isEmpty()) moveStr else "$existing||$moveStr"
+        window.localStorage.setItem("battleship_moves", newMovesStr)
     }
 
-    override suspend fun insertMoves(moves: List<Move>) {
-        val processed = moves.map { 
+    override suspend fun insertMoves(movesList: List<Move>) {
+        val processed = movesList.map { 
             val id = if (it.id == 0) nextMoveId++ else it.id
             it.copy(id = id)
         }
         this.moves.value = this.moves.value + processed
-        saveToStorage()
+        
+        // Optimize Wasm performance: Append to localStorage instead of full rewrite
+        val existing = window.localStorage.getItem("battleship_moves") ?: ""
+        val appendStr = processed.joinToString("||") { m ->
+            "${m.id}|${m.gameId}|${m.isOffense}|${m.x}|${m.y}|${b64(m.result)}|${m.isSunk}|${m.turnNumber}|${m.shotNumber}"
+        }
+        val newMovesStr = if (existing.isEmpty()) appendStr else if (appendStr.isNotEmpty()) "$existing||$appendStr" else existing
+        window.localStorage.setItem("battleship_moves", newMovesStr)
     }
 
     override suspend fun deleteLastMove(gameId: Int) {
         val lastMove = moves.value.filter { it.gameId == gameId }.maxByOrNull { it.id }
         if (lastMove != null) {
             moves.value = moves.value.filter { it.id != lastMove.id }
-            saveToStorage()
+            saveMovesToStorage()
         }
     }
 
     override suspend fun deleteMoves(moves: List<Move>) {
         val idsToRemove = moves.map { it.id }.toSet()
         this.moves.value = this.moves.value.filter { it.id !in idsToRemove }
-        saveToStorage()
+        saveMovesToStorage()
     }
 
     override suspend fun deleteGameById(gameId: Int) {
         games.value = games.value - gameId
         moves.value = moves.value.filter { it.gameId != gameId }
-        saveToStorage()
+        saveGamesToStorage()
+        saveMovesToStorage()
     }
 
     override fun getAllGames(): Flow<List<Game>> = games.map { it.values.toList() }
@@ -176,7 +194,7 @@ class DummyRepository : GameRepository {
 
     override suspend fun insertProfile(profile: OpponentProfile) {
         profiles.value = profiles.value + (profile.opponentName to profile)
-        saveToStorage()
+        saveProfilesToStorage()
     }
 
     override fun getUniquePlayers(): Flow<List<String>> = games.map { gamesMap ->

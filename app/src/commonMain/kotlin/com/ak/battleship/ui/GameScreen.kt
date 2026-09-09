@@ -122,7 +122,7 @@ fun GameScreen(viewModel: BattleshipViewModel) {
 
     // --- ASYNC TICKER DATA ---
     var tickerStats by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    LaunchedEffect(viewModel.currentGameId, moves) {
+    LaunchedEffect(viewModel.currentGameId) {
         val (basicStats, wildStats) = viewModel.getStats(
             playerName = viewModel.currentPlayer,
             opponentName = game?.opponentName
