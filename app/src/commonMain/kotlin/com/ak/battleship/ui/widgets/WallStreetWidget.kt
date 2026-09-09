@@ -235,12 +235,7 @@ fun WallStreetWidget(
                 maxLines = 1,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        repeatDelayMillis = 0,
-                        initialDelayMillis = 0,
-                        velocity = 40.dp
-                    )
+                    
             )
         }
     }

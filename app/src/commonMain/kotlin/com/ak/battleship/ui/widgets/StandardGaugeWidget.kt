@@ -167,11 +167,7 @@ fun StandardGaugeWidget(
                 fontWeight = FontWeight.Black,
                 color = finalColor,
                 maxLines = 1,
-                modifier = Modifier.basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    repeatDelayMillis = 1500,
-                    velocity = 30.dp
-                )
+                modifier = Modifier
             )
         }
     }
