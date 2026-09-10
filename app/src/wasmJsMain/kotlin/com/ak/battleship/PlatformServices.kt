@@ -5,6 +5,8 @@ import kotlinx.browser.window
 internal fun jsDateNow(): Double = js("Date.now()")
 internal fun jsFormatDate(timestamp: Double): String = js("new Date(timestamp).toLocaleString()")
 internal fun jsParseDate(dateStr: String): Double = js("Date.parse(dateStr)")
+internal fun jsGenerateUUID(): String = js("crypto.randomUUID()")
+internal fun jsFallbackUUID(): String = js("\"wasm-\" + Date.now() + \"-\" + Math.random()")
 
 actual object PlatformServices {
     actual fun showToast(context: Any?, message: String) {
@@ -36,6 +38,8 @@ actual object PlatformServices {
         }
     }
     
+    actual fun generateUUID(): String { return try { jsGenerateUUID() } catch(e: Exception) { jsFallbackUUID() } }
+
     actual suspend fun readUriText(context: Any?, uri: Any?): String? {
         return null
     }

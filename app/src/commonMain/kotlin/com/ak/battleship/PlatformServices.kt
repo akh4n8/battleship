@@ -5,5 +5,6 @@ expect object PlatformServices {
     fun formatTimestamp(timestamp: Long): String
     fun parseTimestamp(timestampRaw: String): Long?
     fun getCurrentTimeMillis(): Long
+    fun generateUUID(): String
     suspend fun readUriText(context: Any?, uri: Any?): String?
 }

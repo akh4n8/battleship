@@ -33,6 +33,8 @@ actual object PlatformServices {
         return System.currentTimeMillis()
     }
     
+    actual fun generateUUID(): String = java.util.UUID.randomUUID().toString()
+
     actual suspend fun readUriText(context: Any?, uri: Any?): String? {
         val ctx = context as? Context ?: return null
         val u = uri as? Uri ?: return null
