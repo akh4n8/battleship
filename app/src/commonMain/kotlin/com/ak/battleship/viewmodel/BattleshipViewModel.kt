@@ -427,6 +427,7 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                 playerName = playerName,
                 opponentName = opponentName,
                 gameMode = gameMode,
+                timestamp = com.ak.battleship.PlatformServices.getCurrentTimeMillis(),
                 botBrainMetadata = metadataString
             ))
 
@@ -1190,7 +1191,8 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
                 val timestamp = com.ak.battleship.PlatformServices.parseTimestamp(timestampRaw) ?: com.ak.battleship.PlatformServices.getCurrentTimeMillis()
 
                 if (!gamesMap.containsKey(oldId)) {
-                    gamesMap[oldId] = Game(id = 0, playerName = player, opponentName = opponent, gameMode = gameMode, timestamp = timestamp, result = matchOutcome)
+                    gamesMap[oldId] = Game(id = 0, playerName = player, opponentName = opponent, gameMode = gameMode,
+                timestamp = timestamp, result = matchOutcome)
                 }
 
                 val isSunk = (rawResult == "SUNK")
