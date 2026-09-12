@@ -311,7 +311,7 @@ internal object DeductionEngine {
         board: Array<IntArray>,
         activeHits: List<Pair<Int, Int>>,
         claimedHits: Set<Pair<Int, Int>>,
-        random: kotlin.random.Random
+        random: kotlin.random.Random = kotlin.random.Random(0)
     ): Pair<Int, Int>? {
         val prunedHits = activeHits.filter { !claimedHits.contains(it) }
         val unvisited = prunedHits.toMutableSet()

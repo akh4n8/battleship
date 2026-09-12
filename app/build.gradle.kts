@@ -53,7 +53,6 @@ kotlin {
                 implementation("androidx.room:room-runtime:$roomVersion")
                 implementation("androidx.room:room-ktx:$roomVersion")
                 implementation("org.tensorflow:tensorflow-lite:2.14.0")
-                implementation("androidx.datastore:datastore-preferences:1.0.0")
                 implementation("com.airbnb.android:lottie-compose:6.0.0")
             }
         }
@@ -79,6 +78,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    sourceSets["main"].apply {
+        manifest.srcFile("src/androidMain/AndroidManifest.xml")
+        res.srcDirs("src/androidMain/res")
+        assets.srcDirs("src/androidMain/assets")
     }
     buildFeatures {
         compose = true

@@ -1,11 +1,13 @@
 package com.ak.battleship.ai
 
-import org.junit.Assert.*
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * UNIT TESTS: The Deduction Engine
- * Validates the core geometric and mathematical rules of the AI.
+ * Validates the core geometric and mathematical rules of the AI across all platforms.
  */
 class DeductionEngineTest {
 
@@ -15,7 +17,7 @@ class DeductionEngineTest {
     }
 
     @Test
-    fun `executeLinearKill - Horizontal Open Ocean`() {
+    fun executeLinearKill_HorizontalOpenOcean() {
         // 1. SETUP: Create a board with a horizontal line of 3 hits
         val board = getEmptyBoard()
         val hits = listOf(Pair(4, 5), Pair(5, 5), Pair(6, 5))
@@ -29,13 +31,13 @@ class DeductionEngineTest {
         val target = DeductionEngine.executeLinearKill(board, hits, emptySet())
 
         // 3. ASSERT: It MUST target either the left end (3, 5) or right end (7, 5)
-        assertNotNull("Target should not be null", target)
+        assertNotNull(target, "Target should not be null")
         val isValidTarget = target == Pair(3, 5) || target == Pair(7, 5)
-        assertTrue("Target $target is not a valid horizontal endpoint", isValidTarget)
+        assertTrue(isValidTarget, "Target $target is not a valid horizontal endpoint")
     }
 
     @Test
-    fun `executeLinearKill - Wall Constraint forces specific target`() {
+    fun executeLinearKill_WallConstraintForcesSpecificTarget() {
         // 1. SETUP: Ship is jammed against the top wall (y=0)
         val board = getEmptyBoard()
         val hits = listOf(Pair(3, 0), Pair(3, 1))
@@ -48,11 +50,11 @@ class DeductionEngineTest {
         val target = DeductionEngine.executeLinearKill(board, hits, emptySet())
 
         // 3. ASSERT: It cannot shoot up (-1). It MUST shoot down at (3, 2)
-        assertEquals("Failed to respect wall boundary", Pair(3, 2), target)
+        assertEquals(Pair(3, 2), target, "Failed to respect wall boundary")
     }
 
     @Test
-    fun `executeLinearKill - Miss Constraint forces specific target`() {
+    fun executeLinearKill_MissConstraintForcesSpecificTarget() {
         // 1. SETUP: Ship is blocked by a previous MISS on the right
         val board = getEmptyBoard()
         val hits = listOf(Pair(5, 5), Pair(6, 5))
@@ -64,11 +66,11 @@ class DeductionEngineTest {
         val target = DeductionEngine.executeLinearKill(board, hits, emptySet())
 
         // 3. ASSERT: It cannot shoot right (7,5). It MUST shoot left at (4, 5)
-        assertEquals("Failed to respect previous miss", Pair(4, 5), target)
+        assertEquals(Pair(4, 5), target, "Failed to respect previous miss")
     }
 
     @Test
-    fun `executeLinearKill - Fused Ship Hallucination Prevention`() {
+    fun executeLinearKill_FusedShipHallucinationPrevention() {
         // 1. SETUP: An active ship is touching a dead, SUNK ship
         val board = getEmptyBoard()
 
@@ -88,6 +90,6 @@ class DeductionEngineTest {
 
         // 3. ASSERT: It must NOT jump over the SUNK ship to shoot at (1,2).
         // It must realize the left side is dead and strictly target the right side (7,2)
-        assertEquals("Failed to respect SUNK corpse boundaries", Pair(7, 2), target)
+        assertEquals(Pair(7, 2), target, "Failed to respect SUNK corpse boundaries")
     }
 }
