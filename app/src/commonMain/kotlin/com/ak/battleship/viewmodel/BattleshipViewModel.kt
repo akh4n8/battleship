@@ -301,7 +301,8 @@ class BattleshipViewModel(private val dao: GameRepository, private val context: 
             sentTelemetryGameIds.add(gid)
 
             val allMoves = _currentMoves.value
-            val timeStr = com.ak.battleship.PlatformServices.formatTimestamp(game.timestamp)
+            val actualTimestamp = if (game.timestamp > 0L) game.timestamp else com.ak.battleship.PlatformServices.getCurrentTimeMillis()
+            val timeStr = com.ak.battleship.PlatformServices.formatTimestamp(actualTimestamp)
             val payload = com.ak.battleship.network.buildTelemetryBatchPayload(
                 game = game,
                 allMoves = allMoves,
