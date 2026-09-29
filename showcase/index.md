@@ -5,7 +5,7 @@
 
 When playing Battleship, I play with different rules. In short, ships can be adjacent or "touch", and when a ship is sunk, we only say that is sunk and not which ship it is.
 
-Therefore, the hardest and most interesting part is when a ship sinks, you don't know *which* of your previous hits belonged to it. I call this the **Blind Sink Identity Problem** (We can work on the name).
+Therefore, the hardest and most interesting part is when a ship sinks, you don't know *which* of your previous hits belonged to it. I call this the **Blind Sink Identity Problem** (we can work on the name).
 
 To solve this, I built two different AI bots to see which thinks better:
 
