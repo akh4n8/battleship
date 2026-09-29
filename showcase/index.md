@@ -1,17 +1,22 @@
 **[⬅️ Play the Full Kotlin Game](../)**
 
 
-# My Honours Thesis: The Blind Sink Identity Problem
+# My Honours Thesis Proposal Overview
 
-When playing Battleship, the hardest part is when a ship sinks, but you don't know *which* of your previous hits belonged to it. I call this the **Blind Sink Identity Problem**.
+When playing Battleship, I play with different rules. In short, ships can be adjacent or "touch", and when a ship is sunk, we only say that is sunk and not which ship it is.
+
+Therefore, the hardest and most interesting part is when a ship sinks, you don't know *which* of your previous hits belonged to it. I call this the **Blind Sink Identity Problem**.
 
 To solve this, I built two different AI bots to see which thinks better:
 
-### 1. Sherlock: Rule-Based Elimination Engine
-Sherlock uses the strict rules of the game. It looks at the timeline of when you made your hits to perfectly cross out impossible ship locations.
+### 1. Sherlock: Combinatorial Density Map with Kill Algorithm
+- Much more computationally efficient, but biased.
+- It looks at the timeline of when it made its hits to perfectly cross out impossible ship locations.
 
-### 2. Mycroft: MCMC
-Mycroft is a bit different. It uses a Markov Chain Monte Carlo (MCMC) algorithm to play 100,000 random games in its head in a fraction of a second, finding the absolute most likely spot a ship is hiding.
+### 2. Mycroft: Pure MCMC
+- I believe my algorithm is what you call a Markov Chain Monte Carlo (MCMC) algorithm, but I could be wrong.
+- It uses this algorithm to play 100,000 random games in its head in a fraction of a second, finding the absolute most likely spot a ship is hiding.
+- It is unbiased and my crude tests have said it is a few moves better than Sherlock on average.
 
 ### Try it yourself!
 *Play with the interactive debug view below to see how the bots think in real-time.*
