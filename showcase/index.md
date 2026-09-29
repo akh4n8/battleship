@@ -1,6 +1,3 @@
-**[⬅️ Play the Full Kotlin Game](../)**
-
-
 # My Honours Thesis Proposal Overview
 
 When playing Battleship, I play with different rules. In short, ships can be adjacent or "touch", and when a ship is sunk, we only say that is sunk and not which ship it is.
