@@ -919,19 +919,6 @@ private object MycroftBot {
         analysis.claimedHits.forEach { diagnosticMap[it.first][it.second] = 1 }
         analysis.activeHits.forEach { diagnosticMap[it.first][it.second] = 3 }
 
-        // --- PHASE 1: THE ASSASSIN (Deduction Override) ---
-        if (analysis.activeHits.isNotEmpty()) {
-            val target = DeductionEngine.executeLinearKill(board, analysis.activeHits, analysis.claimedHits.toSet(), random)
-            if (target != null) {
-                heatMap[target.first][target.second] = 100
-                return BotDecision(
-                    target,
-                    "Mycroft (Assassin Mode):\nTracing active vector.", // <-- ADDED \n
-                    heatMap,
-                    diagnosticMap
-                )
-            }
-        }
 
         // --- PHASE 2: 128-BIT BITBOARD EXTRACTION & CHRONOLOGY ---
         var missLow = 0L;
@@ -1233,6 +1220,10 @@ private object MycroftBot {
         }
 
         // --- PHASE 6: HEATMAP ASSEMBLY & TARGETING ---
+        var occLow = 0L; var occHigh = 0L
+        for (i in 0..4) { occLow = occLow or stateLow[i]; occHigh = occHigh or stateHigh[i] }
+        val hasActiveHits = (allHitsLow and occLow) != allHitsLow || (allHitsHigh and occHigh) != allHitsHigh
+
         var maxHeat = -1
         var bestMoves = mutableListOf<Pair<Int, Int>>()
 
@@ -1271,10 +1262,13 @@ private object MycroftBot {
                         }
                     } else {
                         // Mycroft Maverick Mode: No psychology, pure math
-                        if (isMoriarty && !isValidParity) {
-                            finalHeat = 0
+                        val safeMode = !isMoriarty
+                        if (safeMode) {
+                            if (!hasActiveHits && !isValidParity) finalHeat = 0
+                            else finalHeat = baseHeat.toInt()
                         } else {
-                            finalHeat = baseHeat.toInt()
+                            if (!isValidParity) finalHeat = 0
+                            else finalHeat = baseHeat.toInt()
                         }
                     }
 
